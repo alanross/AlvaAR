@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no" name="viewport"/>
+    <meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+    <title>AlvaAR Video</title>
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        *:focus {
+            outline: none !important
+        }
+
+        html,
+        body {
+            font-family: 'Helvetica', sans-serif;
+            width: 100vw;
+            height: 100vh;
+            font-size: 12px;
+            font-weight: 300;
+            background: #fff;
+        }
+
+        #container {
+            padding-bottom: 50px;
+            text-align: center;
+            display: none;
+            position: relative;
+            user-select: none;
+        }
+
+        #container::after {
+            content: "Click on video to add 3d objects";
+            text-align: center;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+        }
+
+        #container > div {
+            display: inline-flex;
+            vertical-align: top;
+            margin: 100px 15px 0 15px;
+            padding: 0;
+            position: relative;
+            user-select: none;
+            outline: 1px solid #d20000;
+        }
+
+        #container > div > canvas {
+            position: absolute;
+            left: 0;
+            top: 0;
+            user-select: none;
+        }
+
+        #container > div > canvas:first-child {
+            display: inline-block;
+            position: relative;
+        }
+
+        .tracking #container > div {
+            outline: 1px solid #bebebe;
+        }
+
+        @media only screen and (max-device-width: 800px) {
+            body {
+                background: #000;
+            }
+
+            #container {
+                padding-bottom: 0;
+                text-align: center;
+                background: #000;
+            }
+
+            #container::after {
+                display: none;
+                content: '';
+            }
+
+            #container > div {
+                margin: 0;
+                padding: 0;
+                box-shadow: none;
+            }
+
+            #renderer-map {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+<div id="container">
+    <div id="renderer-cam">
+        <canvas id="renderer-video"></canvas>
+    </div>
+    <div id="renderer-map"></div>
+</div>
+<script type="module">
+    import { Stats } from "./assets/stats.js";
+    import { AlvaAR } from './assets/alva_ar.js';
+    import { Video, ARSimpleView, ARSimpleMap, onFrame } from "./assets/utils.js";
+
+    async function main()
+    {
+        document.body.appendChild( Stats.el );
+        Stats.add( 'total' );
+        Stats.add( 'video' );
+        Stats.add( 'slam' );
+
+        const media = await Video.initialize( './assets/video.mp4' );
+        const alva = await AlvaAR.Initialize( media.width, media.height );
+
+        const $cam = document.getElementById( 'renderer-cam' );
+        const $map = document.getElementById( 'renderer-map' );
+        const $canvas = document.getElementById( 'renderer-video' );
+        const ctx = $canvas.getContext( '2d' );
+
+        $canvas.width = media.width;
+        $canvas.height = media.height;
+
+        const mapRenderer = new ARSimpleMap( $map, media.width, media.height );
+        const camRenderer = new ARSimpleView( $cam, media.width, media.height, mapRenderer );
+
+        let doFindPlane = false;
+
+        $cam.addEventListener( 'click', ( event ) => doFindPlane = true );
+        $cam.parentElement.style.display = 'block';
+
+        media.el.play();
+        media.el.loop = false;
+        media.el.onended = ( event ) =>
+        {
+            media.el.load();
+            media.el.play();
+        };
+
+        onFrame( () =>
+        {
+            Stats.next();
+            Stats.start( 'total' );
+
+            Stats.start( 'video' );
+            const frame = media.getImageData();
+            ctx.clearRect( 0, 0, media.width, media.height );
+            ctx.putImageData( frame, 0, 0 );
+            Stats.stop( 'video' );
+
+            Stats.start( 'slam' );
+            const pose = alva.findCameraPose( frame );
+            Stats.stop( 'slam' );
+
+            if( pose )
+            {
+                camRenderer.updateCameraPose( pose );
+
+                if( doFindPlane )
+                {
+                    doFindPlane = false;
+
+                    const planePose = alva.findPlane();
+
+                    if( planePose )
+                    {
+                        camRenderer.createObjectWithPose( planePose );
+                    }
+                }
+            }
+            else
+            {
+                camRenderer.lostCamera();
+
+                const dots = alva.getFramePoints();
+
+                for( const p of dots )
+                {
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect( p.x, p.y, 2, 2 );
+                }
+            }
+
+            Stats.stop( 'total' );
+            Stats.render();
+
+            return true;
+        }, 30 );
+    }
+
+    window.addEventListener( 'load', main );
+</script>
+</body>
+</html>

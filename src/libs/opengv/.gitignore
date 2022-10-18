@@ -1,0 +1,6 @@
+lib
+build
+install
+*.mexa64
+*.pyc
+.vscode
