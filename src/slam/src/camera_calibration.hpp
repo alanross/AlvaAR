@@ -23,7 +23,7 @@ public:
     CameraCalibration()
     {}
 
-    CameraCalibration(double fx, double fy, double cx, double cy, double k1, double k2, double p1, double p2, double img_w, double img_h);
+    CameraCalibration(double fx, double fy, double cx, double cy, double k1, double k2, double p1, double p2, double imgWidth, double imgHeight);
 
     cv::Point2f projectCamToImageDist(const Eigen::Vector3d &point) const;
 
@@ -35,16 +35,18 @@ public:
 
     Eigen::Vector3d getTranslation() const;
 
-    // Calibration model
     double fx_, fy_, cx_, cy_;
     double k1_, k2_, p1_, p2_;
-    cv::Mat Kcv_, Dcv_;
-    Eigen::Matrix3d K_;
+
+    double imgWidth_;
+    double imgHeight_;
+
+    cv::Mat Kcv_;
+    cv::Mat Dcv_;
+
     Eigen::Vector4d D_;
-
+    Eigen::Matrix3d K_;
     Eigen::Matrix3d inverseK_;
-
-    double img_w_, img_h_;
 
     // Extrinsic Parameters
     Sophus::SE3d Tc0ci_;

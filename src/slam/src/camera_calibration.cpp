@@ -1,7 +1,7 @@
 #include "camera_calibration.hpp"
 
-CameraCalibration::CameraCalibration(double fx, double fy, double cx, double cy, double k1, double k2, double p1, double p2, double img_w, double img_h)
-        : fx_(fx), fy_(fy), cx_(cx), cy_(cy), k1_(k1), k2_(k2), p1_(p1), p2_(p2), img_w_(img_w), img_h_(img_h)
+CameraCalibration::CameraCalibration(double fx, double fy, double cx, double cy, double k1, double k2, double p1, double p2, double imgWidth, double imgHeight)
+        : fx_(fx), fy_(fy), cx_(cx), cy_(cy), k1_(k1), k2_(k2), p1_(p1), p2_(p2), imgWidth_(imgWidth), imgHeight_(imgHeight)
 {
     // intrinsics
     K_ << fx_, 0., cx_, 0., fy_, cy_, 0., 0., 1.;
@@ -19,8 +19,8 @@ CameraCalibration::CameraCalibration(double fx, double fy, double cx, double cy,
 
     const int border = 5;
 
-    roi_rect_ = cv::Rect(cv::Point2i(border, border), cv::Point2i(img_w_ - border, img_h_ - border));
-    roi_mask_ = cv::Mat(img_h, img_w, CV_8UC1, cv::Scalar(0));
+    roi_rect_ = cv::Rect(cv::Point2i(border, border), cv::Point2i(imgWidth_ - border, imgHeight_ - border));
+    roi_mask_ = cv::Mat(imgHeight, imgWidth, CV_8UC1, cv::Scalar(0));
     roi_mask_(roi_rect_) = 255;
 }
 

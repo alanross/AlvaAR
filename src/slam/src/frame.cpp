@@ -11,8 +11,8 @@ Frame::Frame(std::shared_ptr<CameraCalibration> cameraCalibration, const size_t 
           numKeypoints2d_(0), numKeypoints3d_(0), cameraCalibration_(cameraCalibration)
 {
     // Init grid from images size
-    numCellsW_ = static_cast<size_t>(ceilf(static_cast<float>(cameraCalibration_->img_w_) / cellSize_));
-    numCellsH_ = static_cast<size_t>(ceilf(static_cast<float>(cameraCalibration_->img_h_) / cellSize_));
+    numCellsW_ = static_cast<size_t>(ceilf(static_cast<float>(cameraCalibration_->imgWidth_) / cellSize_));
+    numCellsH_ = static_cast<size_t>(ceilf(static_cast<float>(cameraCalibration_->imgHeight_) / cellSize_));
     gridCells_ = numCellsW_ * numCellsH_;
     numOccupiedCells_ = 0;
 
@@ -480,7 +480,7 @@ cv::Point2f Frame::projWorldToImageDist(const Eigen::Vector3d &point) const
 
 bool Frame::isInImage(const cv::Point2f &point) const
 {
-    return (point.x >= 0 && point.y >= 0 && point.x < cameraCalibration_->img_w_ && point.y < cameraCalibration_->img_h_);
+    return (point.x >= 0 && point.y >= 0 && point.x < cameraCalibration_->imgWidth_ && point.y < cameraCalibration_->imgHeight_);
 }
 
 void Frame::displayFrameInfo()

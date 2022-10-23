@@ -255,7 +255,7 @@ void Mapper::triangulateTemporal(Frame &frame)
 bool Mapper::matchingToLocalMap(Frame &frame)
 {
     // Maximum number of map points to track
-    const size_t maxNumLocalMapPoints = state_->frame_max_num_kps_ * 10;
+    const size_t maxNumLocalMapPoints = state_->frameMaxNumKeypoints_ * 10;
 
     // If room for more keypoints, get local map of oldest co-keyframe and add it to set of map points to search for
     auto covMap = frame.getCovisibleKeyframeMap();
@@ -365,8 +365,8 @@ std::map<int, int> Mapper::matchToMap(const Frame &frame, const float maxProject
     }
 
     // Compute max field of view
-    const float fovV = 0.5 * frame.cameraCalibration_->img_h_ / frame.cameraCalibration_->fy_;
-    const float fovH = 0.5 * frame.cameraCalibration_->img_w_ / frame.cameraCalibration_->fx_;
+    const float fovV = 0.5 * frame.cameraCalibration_->imgHeight_ / frame.cameraCalibration_->fy_;
+    const float fovH = 0.5 * frame.cameraCalibration_->imgWidth_ / frame.cameraCalibration_->fx_;
 
     float maxRadFov = 0.;
     if (fovH > fovV)

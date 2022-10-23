@@ -15,18 +15,10 @@ void System::configure(int imageWidth, int imageHeight, double fx, double fy, do
     width = imageWidth;
     height = imageHeight;
 
-    state_ = std::make_shared<State>(imageWidth, imageHeight, fx, fy, cx, cy, k1, k2, p1, p2);
+    state_ = std::make_shared<State>(imageWidth, imageHeight);
+    cameraCalibration_ = std::make_shared<CameraCalibration>(fx, fy, cx, cy, k1, k2, p1, p2, imageWidth, imageHeight);
 
-    cameraCalibration_ = std::make_shared<CameraCalibration>(
-            state_->fxl_, state_->fyl_,
-            state_->cxl_, state_->cyl_,
-            state_->k1l_, state_->k2l_,
-            state_->p1l_, state_->p2l_,
-            state_->imgWidth_,
-            state_->imgHeight_
-    );
-
-    currFrame_ = std::make_shared<Frame>(cameraCalibration_, state_->frame_max_cell_size_);
+    currFrame_ = std::make_shared<Frame>(cameraCalibration_, state_->frameMaxCellSize_);
     featureExtractor_ = std::make_shared<FeatureExtractor>(state_->extractorMaxQuality_);
     featureTracker_ = std::make_shared<FeatureTracker>(state_->trackerMaxIterations_, state_->trackerMaxPxPrecision_);
     mapManager_ = std::make_shared<MapManager>(state_, currFrame_, featureExtractor_);
@@ -129,8 +121,8 @@ int System::getFramePoints(int pointsPtr)
     for (int i = 0, j = 0; i < n; ++i)
     {
         cv::Point2f p = currFrame_->getKeypoints2d()[i].unpx_;
-        data[j++] = (int)p.x;
-        data[j++] = (int)p.y;
+        data[j++] = (int) p.x;
+        data[j++] = (int) p.y;
     }
 
     return numPoints;

@@ -27,7 +27,7 @@ void MapManager::prepareFrame()
     currFrame_->keyframeId_ = numKeyframeIds_;
 
     // Filter if too many keypoints
-    if ((int) currFrame_->numKeypoints_ > state_->frame_max_num_kps_)
+    if ((int) currFrame_->numKeypoints_ > state_->frameMaxNumKeypoints_)
     {
         for (const auto &keypointIds: currFrame_->gridKeypointsIds_)
         {
@@ -218,14 +218,14 @@ void MapManager::extractKeypoints(const cv::Mat &image, const cv::Mat &imageRaw)
 
     describeKeypoints(imageRaw, keypoints, points);
 
-    int numToDetect = state_->frame_max_num_kps_ - currFrame_->numOccupiedCells_;
+    int numToDetect = state_->frameMaxNumKeypoints_ - currFrame_->numOccupiedCells_;
 
     if (numToDetect > 0)
     {
         // Detect kps in the provided images using the cur kps and img roi to set a mask
         std::vector<cv::Point2f> newPoints;
 
-        newPoints = featureExtractor_->detectSingleScale(image, state_->frame_max_cell_size_, points, currFrame_->cameraCalibration_->roi_rect_);
+        newPoints = featureExtractor_->detectSingleScale(image, state_->frameMaxCellSize_, points, currFrame_->cameraCalibration_->roi_rect_);
 
         if (!newPoints.empty())
         {

@@ -1,23 +1,24 @@
 #include "state.hpp"
 
-State::State(double width, double height, double fx, double fy, double cx, double cy, double k1, double k2, double p1, double p2)
+State::State(double imgWidth, double imgHeight )
 {
-    imgWidth_ = width;
-    imgHeight_ = height;
+    imgWidth_ = imgWidth;
+    imgHeight_ = imgHeight;
 
-    fxl_ = fx;
-    fyl_ = fy;
-    cxl_ = cx;
-    cyl_ = cy;
+    frameMaxCellSize_ = 35;
+    claheEnabled_ = false;
+    mapKeyframeFilteringRatio = 0.95;
+    p3pEnabled_ = true;
 
-    k1l_ = k1;
-    k2l_ = k2;
-    p1l_ = p1;
-    p2l_ = p2;
+    float numCellsW = ceil((float) imgWidth_ / (float) frameMaxCellSize_);
+    float numCellsH = ceil((float) imgHeight_ / (float) frameMaxCellSize_);
+    frameMaxNumKeypoints_ = (int) (numCellsW * numCellsH);
 
-    float numCellsW = ceil((float) imgWidth_ / (float) frame_max_cell_size_);
-    float numCellsH = ceil((float) imgHeight_ / (float) frame_max_cell_size_);
-    frame_max_num_kps_ = (int) (numCellsW * numCellsH);
+    std::cout << "- [State]: Config";
+    std::cout << ": Frame Max Cell Size: " << frameMaxCellSize_;
+    std::cout << ", Clahe Enabled: " << claheEnabled_;
+    std::cout << ", Map Keyframe Filtering Ratio: " << mapKeyframeFilteringRatio;
+    std::cout << ", P3P Enabled: " << p3pEnabled_ << std::endl;
 }
 
 void State::reset()
