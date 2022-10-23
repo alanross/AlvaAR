@@ -236,7 +236,7 @@ class Camera
         this.height = videoElement.videoHeight;
 
         this._canvas = createCanvas( this.width, this.height );
-        this._ctx = this._canvas.getContext( '2d' );
+        this._ctx = this._canvas.getContext( '2d', { willReadFrequently: true } );
     }
 
     getImageData()
@@ -323,7 +323,7 @@ class Video
         this.height = videoElement.videoHeight;
 
         this._canvas = createCanvas( this.width, this.height );
-        this._ctx = this._canvas.getContext( '2d' );
+        this._ctx = this._canvas.getContext( '2d', { willReadFrequently: true } );
 
         this._lastTime = -1;
         this._imageData = null;
