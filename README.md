@@ -2,11 +2,15 @@
 
 AlvaAR is a realtime visual SLAM algorithm running as WebAssembly, in the browser. It is a heavily modified version of the [OV²SLAM](https://github.com/ov2slam/ov2slam) and [ORB-SLAM2](https://github.com/raulmur/ORB_SLAM2) projects. SLAM is the core building block of Augmented Reality applications focusing on world tracking.
 
+[Video Demo](https://alanross.github.io/AlvaAR/examples/public/video.html): A desktop browser version using a video file as input.  
+[Camera Demo](https://alanross.github.io/AlvaAR/examples/public/camera.html): The mobile version will access the device camera as input.
+
 ![image](examples/public/assets/image.gif)
+
 
 ## Usage
 
-This code shows how to send image data to Alva to compute the camera pose.
+This code shows how to send image data to AlvaAR to compute the camera pose.
 
 ```javascript
 import { AlvaAR } from 'alva_ar.js';
