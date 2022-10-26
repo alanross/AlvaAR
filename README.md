@@ -2,10 +2,54 @@
 
 AlvaAR is a realtime visual SLAM algorithm running as WebAssembly, in the browser. It is a heavily modified version of the [OV²SLAM](https://github.com/ov2slam/ov2slam) and [ORB-SLAM2](https://github.com/raulmur/ORB_SLAM2) projects. SLAM is the core building block of Augmented Reality applications focusing on world tracking.
 
+![image](examples/public/assets/image.gif)
+
+
+## Examples
+The examples use [ThreeJS](https://threejs.org/) to apply and render the estimated camera pose to a 3d environment.  
+
 [Video Demo](https://alanross.github.io/AlvaAR/examples/public/video.html): A desktop browser version using a video file as input.  
 [Camera Demo](https://alanross.github.io/AlvaAR/examples/public/camera.html): The mobile version will access the device camera as input.
 
-![image](examples/public/assets/image.gif)
+<img width="75" src="examples/public/assets/qr.png">
+
+### Run with http server
+To run the examples on your local machine, start a simple http server in the examples/ folder:
+
+`$: python 2: python -m SimpleHTTPServer 8080` or   
+`$: python 3: python -m http.server 8080` or  
+`$: emrun --browser chrome ./`
+
+Then open [http://localhost:8080/public/video.html](http://localhost:8080/public/video.html]) in your browser.
+
+### Run with https server
+To run the examples on another device in your local network, they must be served via https. For convenience, a simple https server was added to this project – do not use for production.
+
+#### 1) Install server dependencies
+```
+    $: cd ./AlvaAR/examples/
+    $: npm install
+```
+
+#### 2) Generate self-signed certificate
+```
+    $: cd ./AlvaAR/examples
+    $: mkdir ssl/
+    $: cd ssl/
+    $: openssl genrsa -des3 -out key.pem 2048
+    $: openssl req -new -sha256 -key key.pem -out cert.csr
+```
+
+#### 3) Run
+```
+    $: cd ./AlvaAR/examples/
+    $: nvm use 13.2
+    $: npm start
+``` 
+Then open [https://YOUR_IP:443/video.html](https://YOUR_IP:443/video.html]) in your browser.
+If met with a <b>ERR_CERT_INVALID</b> error in Chrome,
+try typing <i>badidea</i> or <i>thisisunsafe</i> directly in Chrome on the same page.
+Don’t do this unless the site is one you trust or develop.
 
 
 ## Usage
@@ -51,48 +95,6 @@ function loop()
 };
 ```
 
-
-## Examples
-
-The examples use [ThreeJS](https://threejs.org/) to apply and render the estimated camera pose to a 3d environment.
-
-### Run with http server
-To run the examples on your local machine, start a simple http server in the examples/ folder:
-
-`$: python 2: python -m SimpleHTTPServer 8080` or   
-`$: python 3: python -m http.server 8080` or  
-`$: emrun --browser chrome ./`
-
-Then open [http://localhost:8080/public/video.html](http://localhost:8080/public/video.html]) in your browser.
-
-### Run with https server
-To run the examples on another device in your local network, they must be served via https. For convenience, a simple https server was added to this project – do not use for production.
-
-#### 1) Install server dependencies
-```
-    $: cd ./AlvaAR/examples/
-    $: npm install
-```
-
-#### 2) Generate self-signed certificate
-```
-    $: cd ./AlvaAR/examples
-    $: mkdir ssl/
-    $: cd ssl/
-    $: openssl genrsa -des3 -out key.pem 2048
-    $: openssl req -new -sha256 -key key.pem -out cert.csr
-```
-
-#### 3) Run
-```
-    $: cd ./AlvaAR/examples/
-    $: nvm use 13.2
-    $: npm start
-``` 
-Then open [https://YOUR_IP:443/video.html](https://YOUR_IP:443/video.html]) in your browser.
-If met with a <b>ERR_CERT_INVALID</b> error in Chrome,
-try typing <i>badidea</i> or <i>thisisunsafe</i> directly in Chrome on the same page.
-Don’t do this unless the site is one you trust or develop.
 
 ## Build
 
@@ -146,10 +148,12 @@ Then, run the following:
     $: emmake make install
 ```
 
-## Future Work
-- Improve the initialisation phase to be more stable and predictable.
-- Move feature extraction and tracking to GPU.
-- Blend visual SLAM with IMU data to increase robustness. 
+
+## Roadmap
+- [ ] Improve the initialisation phase to be more stable and predictable.
+- [ ] Move feature extraction and tracking to GPU.
+- [ ] Blend visual SLAM with IMU data to increase robustness. 
+
 
 ## License
 
@@ -157,4 +161,8 @@ AlvaAR is released under the [GPLv3 license](https://www.gnu.org/licenses/gpl-3.
 
 OV²SLAM and ORB-SLAM2 are both released under the [GPLv3 license](https://www.gnu.org/licenses/gpl-3.0.txt). Please see 3rd party dependency licenses in libs/.
 
-## 
+
+## Contact
+
+Alan Ross: [@alan_ross](https://twitter.com/alan_ross) or [me@aross.io]()  
+Project: [https://github.com/alanross/AlvaAR](https://github.com/alanross/AlvaAR)
