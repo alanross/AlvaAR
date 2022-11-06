@@ -5,7 +5,7 @@ State::State(double imgWidth, double imgHeight )
     imgWidth_ = imgWidth;
     imgHeight_ = imgHeight;
 
-    frameMaxCellSize_ = 35;
+    frameMaxCellSize_ = 40;
     claheEnabled_ = false;
     mapKeyframeFilteringRatio = 0.95;
     p3pEnabled_ = true;
