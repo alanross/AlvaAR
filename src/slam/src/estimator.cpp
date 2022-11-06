@@ -116,12 +116,13 @@ void Estimator::mapFiltering()
             continue;
         }
 
-        size_t nbgoodobs = 0;
-        size_t nbtot = 0;
+        size_t numGoodObservations = 0;
+        size_t numTotal = 0;
 
         for (const auto &kp: pkf->getKeypoints3d())
         {
             auto plm = mapManager_->getMapPoint(kp.keypointId_);
+
             if (plm == nullptr)
             {
                 mapManager_->removeMapPointObs(kp.keypointId_, kfid);
@@ -133,14 +134,14 @@ void Estimator::mapFiltering()
             }
             else
             {
-                size_t nbcokfs = plm->getKeyframeObsSet().size();
+                size_t nbcokfs = plm->getObservedKeyframeIds().size();
                 if (nbcokfs > 4)
                 {
-                    nbgoodobs++;
+                    numGoodObservations++;
                 }
             }
 
-            nbtot++;
+            numTotal++;
 
             if (newKeyframeAvailable_)
             {
@@ -148,7 +149,8 @@ void Estimator::mapFiltering()
             }
         }
 
-        float ratio = (float) nbgoodobs / nbtot;
+        float ratio = (float) numGoodObservations / numTotal;
+
         if (ratio > state_->mapKeyframeFilteringRatio)
         {
             // only useful if loop closing enabled

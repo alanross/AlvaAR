@@ -3,9 +3,7 @@
 
 void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
 {
-    // =================================
-    //      Setup BA Problem
-    // =================================
+    // ================================================================== 1. Setup BA Problem
 
     ceres::Problem problem;
     ceres::LossFunctionWrapper *lossFunction;
@@ -46,21 +44,18 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
     std::vector<std::pair<ceres::CostFunction *, std::pair<ceres::ResidualBlockId, std::pair<int, int>>>> vreprojerr_kfid_lmid, vright_reprojerr_kfid_lmid;
 
     // Add the cam calibration parameters
-    auto pcalib_cam = newFrame.cameraCalibration_;
-    CalibParametersBlock calibpar(0, pcalib_cam->fx_, pcalib_cam->fy_, pcalib_cam->cx_, pcalib_cam->cy_);
-    problem.AddParameterBlock(calibpar.values(), 4);
-    ordering->AddElementToGroup(calibpar.values(), 1);
+    auto cameraCalibration = newFrame.cameraCalibration_;
+    CalibParametersBlock calibParams(0, cameraCalibration->fx_, cameraCalibration->fy_, cameraCalibration->cx_, cameraCalibration->cy_);
+    problem.AddParameterBlock(calibParams.values(), 4);
+    ordering->AddElementToGroup(calibParams.values(), 1);
 
-    problem.SetParameterBlockConstant(calibpar.values());
-
-    Sophus::SE3d Trl, Tlr;
-    PoseParametersBlock rlextrinpose(0, Trl);
+    problem.SetParameterBlockConstant(calibParams.values());
 
     // Get the new keyframe covisible keyframes
-    std::map<int, int> map_covkfs = newFrame.getCovisibleKeyframeMap();
+    std::map<int, int> covisibleKeyframeMap = newFrame.getCovisibleKeyframeMap();
 
     // Add the new keyframe to the map with max score
-    map_covkfs.emplace(newFrame.keyframeId_, newFrame.numKeypoints3d_);
+    covisibleKeyframeMap.emplace(newFrame.keyframeId_, newFrame.numKeypoints3d_);
 
     // Keep track of map points no suited for BA for speed-up
     std::unordered_set<int> set_badlmids;
@@ -70,15 +65,15 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
 
     if (state_->debug_)
     {
-        std::cout << "\n >>> Local BA : new keyframe is #" << newFrame.keyframeId_ << " -- with covisible graph of size : " << map_covkfs.size();
+        std::cout << "\n >>> Local BA : new keyframe is #" << newFrame.keyframeId_ << " -- with covisible graph of size : " << covisibleKeyframeMap.size();
     }
 
     bool all_cst = false;
 
-    // Go through the covisibility Kf map
-    int nmaxkfid = map_covkfs.rbegin()->first;
+    // Go through the covisibility keyframe map
+    int nmaxkfid = covisibleKeyframeMap.rbegin()->first;
 
-    for (auto it = map_covkfs.rbegin(); it != map_covkfs.rend(); it++)
+    for (auto it = covisibleKeyframeMap.rbegin(); it != covisibleKeyframeMap.rend(); it++)
     {
 
         int kfid = it->first;
@@ -154,7 +149,7 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
         double unanch_u = -1.;
         double unanch_v = -1.;
 
-        for (const auto &kfid: plm->getKeyframeObsSet())
+        for (const auto &kfid: plm->getObservedKeyframeIds())
         {
             if (kfid > nmaxkfid)
             {
@@ -229,7 +224,7 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
 
                 rid = problem.AddResidualBlock(
                         f, lossFunction,
-                        calibpar.values(),
+                        calibParams.values(),
                         map_id_posespar_.at(kfanchid).values(),
                         map_id_posespar_.at(kfid).values(),
                         map_id_invptspar_.at(lmid).values()
@@ -241,7 +236,7 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
 
                 f = new DirectSE3::ReprojectionErrorKSE3XYZ(kp.unpx_.x, kp.unpx_.y, scale);
 
-                rid = problem.AddResidualBlock(f, lossFunction, calibpar.values(), map_id_posespar_.at(kfid).values(), map_id_pointspar_.at(lmid).values());
+                rid = problem.AddResidualBlock(f, lossFunction, calibParams.values(), map_id_posespar_.at(kfid).values(), map_id_pointspar_.at(lmid).values());
             }
 
             vreprojerr_kfid_lmid.push_back(std::make_pair(f, std::make_pair(rid, std::make_pair(kfid, kp.keypointId_))));
@@ -282,15 +277,13 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
         }
 
         std::cout << "\n\n >>> keyframes in cov map : ";
-        for (const auto &id_score: map_covkfs)
+        for (const auto &id_score: covisibleKeyframeMap)
         {
             std::cout << " keyframe #" << id_score.first << " (cov score : " << id_score.second << "), ";
         }
     }
 
-    // =================================
-    //      Solve BA Problem
-    // =================================
+    // ================================================================== 2. Solve BA Problem
 
     ceres::Solver::Options options;
     options.linear_solver_ordering.reset(ordering);
@@ -298,10 +291,10 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
     options.trust_region_strategy_type = ceres::LEVENBERG_MARQUARDT;
     options.num_threads = 1;
     options.max_num_iterations = 5;
-    options.function_tolerance = 1.e-3;
+    options.function_tolerance = 0.001;
     options.max_solver_time_in_seconds = 0.2;
     options.minimizer_progress_to_stdout = state_->debug_;
-    options.max_solver_time_in_seconds *= 2.; //set only if not forcing realtime
+    options.max_solver_time_in_seconds *= 2.0; //set only if not forcing realtime
 
     ceres::Solver::Summary summary;
     ceres::Solve(options, &problem, &summary);
@@ -311,45 +304,44 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
         std::cout << summary.FullReport() << std::endl;
     }
 
-    // =================================
-    //      Remove outliers
-    // =================================
+    // ================================================================== 3. Remove outliers
 
-    size_t nbbadobsmono = 0;
+    size_t numBadObservationsMono = 0;
 
-    std::vector<std::pair<int, int>> vbadkflmids;
-    vbadkflmids.reserve(vreprojerr_kfid_lmid.size() / 10);
+    std::vector<std::pair<int, int>> badKeyframeLandmarkIds;
+    badKeyframeLandmarkIds.reserve(vreprojerr_kfid_lmid.size() / 10);
 
     for (auto it = vreprojerr_kfid_lmid.begin(); it != vreprojerr_kfid_lmid.end();)
     {
-        bool bbigchi2 = true;
-        bool bdepthpos = true;
+        bool bigChi2 = true;
+        bool depthPositive = true;
 
         if (state_->inverseDepthEnabled_)
         {
             auto *err = static_cast<DirectSE3::ReprojectionErrorKSE3AnchInvDepth *>(it->first);
-            bbigchi2 = err->chi2err_ > threshold;
-            bdepthpos = err->isDepthPositive_;
+            bigChi2 = err->chi2err_ > threshold;
+            depthPositive = err->isDepthPositive_;
         }
         else
         {
             auto *err = static_cast<DirectSE3::ReprojectionErrorKSE3XYZ *>(it->first);
-            bbigchi2 = err->chi2err_ > threshold;
-            bdepthpos = err->isDepthPositive_;
+            bigChi2 = err->chi2err_ > threshold;
+            depthPositive = err->isDepthPositive_;
         }
 
-        if (bbigchi2 || !bdepthpos)
+        if (bigChi2 || !depthPositive)
         {
             if (state_->applyL2AfterRobust_)
             {
                 auto rid = it->second.first;
                 problem.RemoveResidualBlock(rid);
             }
+
             int lmid = it->second.second.second;
             int kfid = it->second.second.first;
-            vbadkflmids.push_back(std::pair<int, int>(kfid, lmid));
+            badKeyframeLandmarkIds.push_back(std::pair<int, int>(kfid, lmid));
             set_badlmids.insert(lmid);
-            nbbadobsmono++;
+            numBadObservationsMono++;
 
             it = vreprojerr_kfid_lmid.erase(it);
         }
@@ -359,16 +351,14 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
         }
     }
 
-    size_t nbbadobs = nbbadobsmono;
+    size_t numBadObservations = numBadObservationsMono;
 
-    // =================================
-    //      Refine BA Solution
-    // =================================
+    // ================================================================== 4. Refine BA Solution
 
-    bool bl2optimdone = false;
+    bool l2OptimisationDone = false;
 
-    // Refine without Robust cost if req.
-    if (state_->applyL2AfterRobust_ && useRobustCost && nbbadobs > 0)
+    // Refine without robust cost if required
+    if (state_->applyL2AfterRobust_ && useRobustCost && numBadObservations > 0)
     {
         if (!vreprojerr_kfid_lmid.empty() && !vright_reprojerr_kfid_lmid.empty())
         {
@@ -376,12 +366,12 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
         }
 
         options.max_num_iterations = 10;
-        options.function_tolerance = 1.e-3;
-        options.max_solver_time_in_seconds /= 2.;
+        options.function_tolerance = 0.001;
+        options.max_solver_time_in_seconds /= 2.0;
 
         ceres::Solve(options, &problem, &summary);
 
-        bl2optimdone = true;
+        l2OptimisationDone = true;
 
         if (state_->debug_)
         {
@@ -389,38 +379,36 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
         }
     }
 
-    // =================================
-    //      Remove outliers
-    // =================================
+    // ================================================================== 5. Remove outliers
 
-    // Remove Bad Observations
-    if (bl2optimdone)
+    // Remove bad observations
+    if (l2OptimisationDone)
     {
         for (auto it = vreprojerr_kfid_lmid.begin(); it != vreprojerr_kfid_lmid.end();)
         {
-            bool bbigchi2 = true;
-            bool bdepthpos = true;
+            bool bigChi2 = true;
+            bool depthPositive = true;
 
             if (state_->inverseDepthEnabled_)
             {
                 auto *err = static_cast<DirectSE3::ReprojectionErrorKSE3AnchInvDepth *>(it->first);
-                bbigchi2 = err->chi2err_ > threshold;
-                bdepthpos = err->isDepthPositive_;
+                bigChi2 = err->chi2err_ > threshold;
+                depthPositive = err->isDepthPositive_;
             }
             else
             {
                 auto *err = static_cast<DirectSE3::ReprojectionErrorKSE3XYZ *>(it->first);
-                bbigchi2 = err->chi2err_ > threshold;
-                bdepthpos = err->isDepthPositive_;
+                bigChi2 = err->chi2err_ > threshold;
+                depthPositive = err->isDepthPositive_;
             }
 
-            if (bbigchi2 || !bdepthpos)
+            if (bigChi2 || !depthPositive)
             {
-                int lmid = it->second.second.second;
-                int kfid = it->second.second.first;
-                vbadkflmids.push_back(std::pair<int, int>(kfid, lmid));
-                set_badlmids.insert(lmid);
-                nbbadobsmono++;
+                int mapPointId = it->second.second.second;
+                int keyframeId = it->second.second.first;
+                badKeyframeLandmarkIds.push_back(std::pair<int, int>(keyframeId, mapPointId));
+                set_badlmids.insert(mapPointId);
+                numBadObservationsMono++;
 
                 it = vreprojerr_kfid_lmid.erase(it);
             }
@@ -431,175 +419,178 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
         }
     }
 
-    // =================================
-    //      Update State Parameters
-    // =================================
+    // ================================================================== 6. Update State Parameters
 
-    for (const auto &badkflmid: vbadkflmids)
+    for (const auto &pair: badKeyframeLandmarkIds)
     {
-        int kfid = badkflmid.first;
-        int lmid = badkflmid.second;
-        auto it = map_local_pkfs.find(kfid);
+        int kfId = pair.first;
+        int lmId = pair.second;
+        auto it = map_local_pkfs.find(kfId);
+
         if (it != map_local_pkfs.end())
         {
-            mapManager_->removeMapPointObs(lmid, kfid);
+            mapManager_->removeMapPointObs(lmId, kfId);
         }
-        if (kfid == mapManager_->currFrame_->keyframeId_)
+
+        if (kfId == mapManager_->currFrame_->keyframeId_)
         {
-            mapManager_->removeObsFromCurrFrameById(lmid);
+            mapManager_->removeObsFromCurrFrameById(lmId);
         }
-        set_badlmids.insert(lmid);
+
+        set_badlmids.insert(lmId);
     }
 
     // Update keyframes
-    for (const auto &kfid_pkf: map_local_pkfs)
+    for (const auto &pair: map_local_pkfs)
     {
-        int kfid = kfid_pkf.first;
+        int kfId = pair.first;
 
-        if (set_cstkfids.count(kfid))
+        if (set_cstkfids.count(kfId))
         {
             continue;
         }
 
-        auto pkf = kfid_pkf.second;
+        auto keyframe = pair.second;
 
-        if (pkf == nullptr)
+        if (keyframe == nullptr)
         {
             continue;
         }
 
-        auto it = map_id_posespar_.find(kfid);
+        auto it = map_id_posespar_.find(kfId);
 
         if (it != map_id_posespar_.end())
         {
-            pkf->setTwc(it->second.getPose());
+            keyframe->setTwc(it->second.getPose());
         }
     }
 
     // Update map points
-    for (const auto &lmid_plm: map_local_plms)
+    for (const auto &pair: map_local_plms)
     {
-        int lmid = lmid_plm.first;
-        auto plm = lmid_plm.second;
+        int lmId = pair.first;
+        auto mapPoint = pair.second;
 
-        if (plm == nullptr)
+        if (mapPoint == nullptr)
         {
-            set_badlmids.erase(lmid);
+            set_badlmids.erase(lmId);
             continue;
         }
 
-        if (plm->isBad())
+        if (mapPoint->isBad())
         {
-            mapManager_->removeMapPoint(lmid);
-            set_badlmids.erase(lmid);
+            mapManager_->removeMapPoint(lmId);
+            set_badlmids.erase(lmId);
             continue;
         }
 
         // Map Point Culling
-        auto kfids = plm->getKeyframeObsSet();
+        auto kfids = mapPoint->getObservedKeyframeIds();
+
         if (kfids.size() < 3)
         {
-            if (plm->keyframeId_ < newFrame.keyframeId_ - 3 && !plm->isObserved_)
+            if (mapPoint->keyframeId_ < newFrame.keyframeId_ - 3 && !mapPoint->isObserved_)
             {
-                mapManager_->removeMapPoint(lmid);
-                set_badlmids.erase(lmid);
+                mapManager_->removeMapPoint(lmId);
+                set_badlmids.erase(lmId);
                 continue;
             }
         }
 
         if (state_->inverseDepthEnabled_)
         {
-            auto invptit = map_id_invptspar_.find(lmid);
+            auto invptit = map_id_invptspar_.find(lmId);
+
             if (invptit == map_id_invptspar_.end())
             {
-                set_badlmids.insert(lmid);
+                set_badlmids.insert(lmId);
                 continue;
             }
+
             double zanch = 1. / invptit->second.getInvDepth();
             if (zanch <= 0.)
             {
-                mapManager_->removeMapPoint(lmid);
-                set_badlmids.erase(lmid);
+                mapManager_->removeMapPoint(lmId);
+                set_badlmids.erase(lmId);
                 continue;
             }
 
-            auto it = map_local_pkfs.find(plm->keyframeId_);
+            auto it = map_local_pkfs.find(mapPoint->keyframeId_);
             if (it == map_local_pkfs.end())
             {
-                set_badlmids.insert(lmid);
+                set_badlmids.insert(lmId);
                 continue;
             }
-            auto pkfanch = it->second;
 
+            auto pkfanch = it->second;
             if (pkfanch != nullptr)
             {
-                auto kp = pkfanch->getKeypointById(lmid);
+                auto kp = pkfanch->getKeypointById(lmId);
                 Eigen::Vector3d uvpt(kp.unpx_.x, kp.unpx_.y, 1.);
                 Eigen::Vector3d optwpt = pkfanch->getTwc() * (zanch * pkfanch->cameraCalibration_->inverseK_ * uvpt);
-                mapManager_->updateMapPoint(lmid, optwpt, invptit->second.getInvDepth());
+                mapManager_->updateMapPoint(lmId, optwpt, invptit->second.getInvDepth());
             }
             else
             {
-                set_badlmids.insert(lmid);
+                set_badlmids.insert(lmId);
             }
         }
         else
         {
-            auto optlmit = map_id_pointspar_.find(lmid);
+            auto optlmit = map_id_pointspar_.find(lmId);
             if (optlmit != map_id_pointspar_.end())
             {
-                mapManager_->updateMapPoint(lmid, optlmit->second.getPoint());
+                mapManager_->updateMapPoint(lmId, optlmit->second.getPoint());
             }
             else
             {
-                set_badlmids.insert(lmid);
+                set_badlmids.insert(lmId);
             }
         }
     }
 
-    // Map Point Culling for bad Obs.
-    size_t nbbadlm = 0;
+    // Map point culling for bad observations
+    size_t numBadLandmarks = 0;
     for (const auto &lmid: set_badlmids)
     {
-        std::shared_ptr<MapPoint> plm;
+        std::shared_ptr<MapPoint> mapPoint;
         auto plmit = map_local_plms.find(lmid);
+
         if (plmit == map_local_plms.end())
         {
-            plm = mapManager_->getMapPoint(lmid);
+            mapPoint = mapManager_->getMapPoint(lmid);
         }
         else
         {
-            plm = plmit->second;
+            mapPoint = plmit->second;
         }
-        if (plm == nullptr)
+
+        if (mapPoint == nullptr)
         {
             continue;
         }
 
-        if (plm->isBad())
+        if (mapPoint->isBad())
         {
             mapManager_->removeMapPoint(lmid);
-            nbbadlm++;
+            numBadLandmarks++;
         }
         else
         {
-            auto set_cokfs = plm->getKeyframeObsSet();
+            auto set_cokfs = mapPoint->getObservedKeyframeIds();
+
             if (set_cokfs.size() < 3)
             {
-                if (plm->keyframeId_ < newFrame.keyframeId_ - 3 && !plm->isObserved_)
+                if (mapPoint->keyframeId_ < newFrame.keyframeId_ - 3 && !mapPoint->isObserved_)
                 {
                     mapManager_->removeMapPoint(lmid);
-                    nbbadlm++;
+                    numBadLandmarks++;
                 }
             }
         }
     }
 
-    nbbadobs = nbbadobsmono;
+    numBadObservations = numBadObservationsMono;
 
-    if (state_->debug_)
-    {
-        std::cout << "\n \t>>> localBA() --> Nb of bad obs / nb removed map point : " << nbbadobs << " / " << nbbadlm;
-        std::cout << "\n \t>>> localBA() --> Nb of bad obs mono : " << nbbadobsmono;
-    }
+    //std::cout << "- [System]: Bad obs: " << numBadObservations << ", Removed map points: " << numBadLandmarks << std::endl;
 }

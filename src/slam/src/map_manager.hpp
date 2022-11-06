@@ -50,7 +50,7 @@ public:
 
     void updateFrameCovisibility(Frame &frame);
 
-    void mergeMapPoints(const int prevMapPointId, const int newMapPointId);
+    void mergeMapPoints(const int prvMapPointId, const int newMapPointId);
 
     // Remove a keyframe from the map
     void removeKeyframe(const int keyframeId);

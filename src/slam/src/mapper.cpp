@@ -161,7 +161,7 @@ void Mapper::triangulateTemporal(Frame &frame)
         }
 
         // Get the set of keyframes sharing observation of this 2D map point
-        std::set<int> coKeyframeIds = mapPoint->getKeyframeObsSet();
+        std::set<int> coKeyframeIds = mapPoint->getObservedKeyframeIds();
 
         // Continue if new keyframe is the only one observing it
         if (coKeyframeIds.size() < 2)
@@ -482,9 +482,9 @@ std::map<int, int> Mapper::matchToMap(const Frame &frame, const float maxProject
             }
 
             bool isCandidate = true;
-            auto mapPointKeyframes = mapPoint->getKeyframeObsSet();
+            auto mapPointKeyframes = mapPoint->getObservedKeyframeIds();
 
-            for (const auto &keyframeId: kpMapPoint->getKeyframeObsSet())
+            for (const auto &keyframeId: kpMapPoint->getObservedKeyframeIds())
             {
                 if (mapPointKeyframes.count(keyframeId))
                 {
@@ -501,7 +501,7 @@ std::map<int, int> Mapper::matchToMap(const Frame &frame, const float maxProject
             float coProjectionPx = 0.;
             size_t numCoKeyPoints = 0;
 
-            for (const auto &keyframeId: kpMapPoint->getKeyframeObsSet())
+            for (const auto &keyframeId: kpMapPoint->getObservedKeyframeIds())
             {
                 auto coKeyframe = mapManager_->getKeyframe(keyframeId);
                 if (coKeyframe != nullptr)

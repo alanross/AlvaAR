@@ -57,17 +57,17 @@ Eigen::Vector3d MapPoint::getPoint() const
     return point3d_;
 }
 
-std::set<int> MapPoint::getKeyframeObsSet() const
+std::set<int> MapPoint::getObservedKeyframeIds() const
 {
     return observedKeyframeIds_;
 }
 
-void MapPoint::addKeyframeObs(const int keyframeId)
+void MapPoint::addObservedKeyframeId(const int keyframeId)
 {
     observedKeyframeIds_.insert(keyframeId);
 }
 
-void MapPoint::removeKfObs(const int keyframeId)
+void MapPoint::removeObservedKeyframeId(const int keyframeId)
 {
     if (!observedKeyframeIds_.count(keyframeId))
     {
