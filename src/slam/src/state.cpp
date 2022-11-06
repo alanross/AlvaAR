@@ -15,8 +15,10 @@ State::State(double imgWidth, double imgHeight )
     frameMaxNumKeypoints_ = (int) (numCellsW * numCellsH);
 
     std::cout << "- [State]: Config";
-    std::cout << ": Frame Max Cell Size: " << frameMaxCellSize_;
-    std::cout << ", Clahe Enabled: " << claheEnabled_;
+    std::cout << ": width: " << imgWidth;
+    std::cout << ", height: " << imgHeight;
+    std::cout << ", Frame Max Cell Size: " << frameMaxCellSize_;
+    std::cout << ", CLAHE Enabled: " << claheEnabled_;
     std::cout << ", Map Keyframe Filtering Ratio: " << mapKeyframeFilteringRatio;
     std::cout << ", P3P Enabled: " << p3pEnabled_ << std::endl;
 }

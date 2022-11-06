@@ -73,7 +73,7 @@ std::vector<cv::Point2f> FeatureExtractor::detectSingleScale(const cv::Mat &imag
 
     size_t numCols = image.cols;
     size_t numRows = image.rows;
-    size_t CellSizeHalf = cellSize / 4;
+    size_t cellSizeHalf = cellSize / 4;
     size_t numCellsH = numRows / cellSize;
     size_t numCellsW = numCols / cellSize;
     size_t numCells = numCellsH * numCellsW;
@@ -88,7 +88,7 @@ std::vector<cv::Point2f> FeatureExtractor::detectSingleScale(const cv::Mat &imag
     for (const auto &px: currKeypoints)
     {
         occupiedCells[px.y / cellSize][px.x / cellSize] = true;
-        cv::circle(mask, px, CellSizeHalf, cv::Scalar(0.), -1);
+        cv::circle(mask, px, cellSizeHalf, cv::Scalar(0.), -1);
     }
 
     size_t numOccupied = 0;
@@ -139,7 +139,7 @@ std::vector<cv::Point2f> FeatureExtractor::detectSingleScale(const cv::Mat &imag
                 if (maxVal >= maxQuality_)
                 {
                     matrixDetectedPx.at(i).push_back(maxPx);
-                    cv::circle(mask, maxPx, CellSizeHalf, cv::Scalar(0.), -1);
+                    cv::circle(mask, maxPx, cellSizeHalf, cv::Scalar(0.), -1);
                 }
 
                 cv::minMaxLoc(hMap.mul(mask(regionOfInterest)), &minVal, &maxVal, &minPx, &maxPx);
@@ -154,7 +154,7 @@ std::vector<cv::Point2f> FeatureExtractor::detectSingleScale(const cv::Mat &imag
                 if (maxVal >= maxQuality_)
                 {
                     matrixSecDetectionsPx.at(i).push_back(maxPx);
-                    cv::circle(mask, maxPx, CellSizeHalf, cv::Scalar(0.), -1);
+                    cv::circle(mask, maxPx, cellSizeHalf, cv::Scalar(0.), -1);
                 }
             }
         }

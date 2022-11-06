@@ -1,13 +1,13 @@
 #include "frame.hpp"
 
 Frame::Frame()
-        : id_(-1), keyframeId_(0), imageTimestamp_(0.), numKeypoints_(0), numKeypoints2d_(0), numKeypoints3d_(0),
+        : id_(-1), keyframeId_(0), timestamp_(0.), numKeypoints_(0), numKeypoints2d_(0), numKeypoints3d_(0),
           Frl_(Eigen::Matrix3d::Zero()), Fcv_(cv::Mat::zeros(3, 3, CV_64F))
 {}
 
 
 Frame::Frame(std::shared_ptr<CameraCalibration> cameraCalibration, const size_t cellSize)
-        : id_(-1), keyframeId_(0), imageTimestamp_(0.), cellSize_(cellSize), numKeypoints_(0),
+        : id_(-1), keyframeId_(0), timestamp_(0.), cellSize_(cellSize), numKeypoints_(0),
           numKeypoints2d_(0), numKeypoints3d_(0), cameraCalibration_(cameraCalibration)
 {
     // Init grid from images size
@@ -20,20 +20,18 @@ Frame::Frame(std::shared_ptr<CameraCalibration> cameraCalibration, const size_t 
 }
 
 Frame::Frame(const Frame &frame)
-        : id_(frame.id_), keyframeId_(frame.keyframeId_), imageTimestamp_(frame.imageTimestamp_), mapKeypoints_(frame.mapKeypoints_), gridKeypointsIds_(frame.gridKeypointsIds_), gridCells_(frame.gridCells_), numOccupiedCells_(frame.numOccupiedCells_),
+        : id_(frame.id_), keyframeId_(frame.keyframeId_), timestamp_(frame.timestamp_), mapKeypoints_(frame.mapKeypoints_), gridKeypointsIds_(frame.gridKeypointsIds_), gridCells_(frame.gridCells_), numOccupiedCells_(frame.numOccupiedCells_),
           cellSize_(frame.cellSize_), numCellsW_(frame.numCellsW_), numCellsH_(frame.numCellsH_), numKeypoints_(frame.numKeypoints_), numKeypoints2d_(frame.numKeypoints2d_), numKeypoints3d_(frame.numKeypoints3d_),
           Twc_(frame.Twc_), Tcw_(frame.Tcw_), cameraCalibration_(frame.cameraCalibration_),
           Frl_(frame.Frl_), Fcv_(frame.Fcv_), covisibleKeyframeIds_(frame.covisibleKeyframeIds_), localMapPointIds_(frame.localMapPointIds_)
 {}
 
-// Set the image imgTimestamp and id
-void Frame::updateFrame(const int id, const double imgTimestamp)
+void Frame::updateFrame(const int id, const double timestamp)
 {
     id_ = id;
-    imageTimestamp_ = imgTimestamp;
+    timestamp_ = timestamp;
 }
 
-// Return vector of keypoint objects
 std::vector<Keypoint> Frame::getKeypoints() const
 {
     std::vector<Keypoint> v;
@@ -45,7 +43,6 @@ std::vector<Keypoint> Frame::getKeypoints() const
     return v;
 }
 
-// Return vector of 2D keypoint objects
 std::vector<Keypoint> Frame::getKeypoints2d() const
 {
     std::vector<Keypoint> v;
@@ -60,7 +57,6 @@ std::vector<Keypoint> Frame::getKeypoints2d() const
     return v;
 }
 
-// Return vector of 3D keypoint objects
 std::vector<Keypoint> Frame::getKeypoints3d() const
 {
     std::vector<Keypoint> result;
@@ -75,7 +71,6 @@ std::vector<Keypoint> Frame::getKeypoints3d() const
     return result;
 }
 
-// Return vector of keypoints' raw pixel positions
 std::vector<cv::Point2f> Frame::getKeypointsPx() const
 {
     std::vector<cv::Point2f> result;
@@ -87,7 +82,6 @@ std::vector<cv::Point2f> Frame::getKeypointsPx() const
     return result;
 }
 
-// Return vector of keypoints' undistorted pixel positions
 std::vector<cv::Point2f> Frame::getKeypointsUnPx() const
 {
     std::vector<cv::Point2f> result;
@@ -110,7 +104,6 @@ Keypoint Frame::getKeypointById(const int keypointId) const
     return it->second;
 }
 
-// Compute keypoint from raw pixel position
 inline void Frame::computeKeypoint(const cv::Point2f &point, Keypoint &keypoint)
 {
     keypoint.px_ = point;
@@ -121,7 +114,6 @@ inline void Frame::computeKeypoint(const cv::Point2f &point, Keypoint &keypoint)
     keypoint.bv_.normalize();
 }
 
-// Create keypoint from raw pixel position
 inline Keypoint Frame::computeKeypoint(const cv::Point2f &point, const int keypointId)
 {
     Keypoint keypoint;
@@ -130,7 +122,6 @@ inline Keypoint Frame::computeKeypoint(const cv::Point2f &point, const int keypo
     return keypoint;
 }
 
-// Add keypoint object to vector of kps
 void Frame::addKeypoint(const Keypoint &keypoint)
 {
     if (mapKeypoints_.count(keypoint.keypointId_))
@@ -154,7 +145,6 @@ void Frame::addKeypoint(const Keypoint &keypoint)
     }
 }
 
-// Add new keypoint from raw pixel position
 void Frame::addKeypoint(const cv::Point2f &pt, const int keypointId)
 {
     Keypoint keypoint = computeKeypoint(pt, keypointId);
@@ -497,7 +487,7 @@ void Frame::reset()
 {
     id_ = -1;
     keyframeId_ = 0;
-    imageTimestamp_ = 0.;
+    timestamp_ = 0.;
 
     mapKeypoints_.clear();
     gridKeypointsIds_.clear();
