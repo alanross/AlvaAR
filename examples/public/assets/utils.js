@@ -1,3 +1,6 @@
+const rad2deg = 180.0 / Math.PI;
+const deg2rad = Math.PI / 180;
+
 function onFrame( frameTickFn, fps = 30 )
 {
     const fpsInterval = ~~(1000 / fps);
@@ -108,7 +111,7 @@ function createCanvas( width, height )
 
 class Camera
 {
-    static async initialize( constraints = null )
+    static async Initialize( constraints = null )
     {
         if( 'facingMode' in constraints && 'deviceId' in constraints )
         {
@@ -339,4 +342,4 @@ class Video
     }
 }
 
-export { Camera, Video, onFrame, isMobile, isIOS, getScreenOrientation, resize2cover }
+export { Camera, Video, onFrame, isMobile, isIOS, getScreenOrientation, resize2cover, rad2deg, deg2rad }
