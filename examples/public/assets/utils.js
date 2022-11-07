@@ -240,7 +240,7 @@ class Camera
 
 class Video
 {
-    static async initialize( url, timeout = 8000 )
+    static async Initialize( url, timeout = 8000 )
     {
         return new Promise( ( resolve, reject ) =>
         {
