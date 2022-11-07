@@ -5,7 +5,7 @@
  *      import { AlvaAR } from 'alva_ar_three.js';
  *
  *      const alva = await AlvaAR.Initialize( ... );
- *      const applyPose = AlvaARConnectorTHREE.initialize( THREE )
+ *      const applyPose = AlvaARConnectorTHREE.Initialize( THREE )
  *      const renderer = new THREE.WebGLRenderer( ... );
  *      const camera = new THREE.PerspectiveCamera( ... );
  *      const scene = new THREE.Scene();
@@ -16,7 +16,7 @@
  *          const imageData = ctx.getImageData( ... );
  *          const pose = alva.findCameraPose( imageData );
  *
- *          if( pose ) applyPose( camera, pose );
+ *          if( pose ) applyPose( pose, camera.quaternion, camera.position );
  *
  *          renderer.render( this.scene, this.camera );
  *      }
@@ -26,7 +26,7 @@ class AlvaARConnectorTHREE
 {
     static Initialize( THREE )
     {
-        return ( obj, pose ) =>
+        return ( pose, rotationQuaternion, translationVector ) =>
         {
             const m = new THREE.Matrix4();
             const q = new THREE.Quaternion();
@@ -37,8 +37,8 @@ class AlvaARConnectorTHREE
             q.setFromRotationMatrix( m );
             q.multiply( a );
 
-            obj.quaternion.set( -q.x, q.y, q.z, q.w );
-            obj.position.set( t.x, -t.y, -t.z );
+            ( rotationQuaternion !== null ) && rotationQuaternion.set( -q.x, q.y, q.z, q.w );
+            ( translationVector !== null ) && translationVector.set( t.x, -t.y, -t.z );
         }
     }
 }

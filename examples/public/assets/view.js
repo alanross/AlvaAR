@@ -46,7 +46,7 @@ class ARCamView
 
     updateCameraPose( pose )
     {
-        this.applyPose( this.camera, pose );
+        this.applyPose( pose, this.camera.quaternion, this.camera.position );
 
         this.object.visible = true;
         this.box.visible = true;
@@ -63,6 +63,8 @@ class ARIMUView
 {
     constructor( container, width, height, x = 0, y = 0, z = -1, scale = 0.1 )
     {
+        this.applyPose = AlvaARConnectorTHREE.Initialize( THREE );
+
         this.renderer = new THREE.WebGLRenderer( { antialias: false, alpha: true } );
         this.renderer.setClearColor( 0, 0 );
         this.renderer.setSize( width, height );
@@ -73,17 +75,25 @@ class ARIMUView
 
         this.camera = new THREE.PerspectiveCamera( 75, width / height, 0.1, 1000 );
         this.camera.rotation.reorder( 'YXZ' );
+        this.camera.position.set( 0, 0, 1 );
         this.camera.updateProjectionMatrix();
         this.camera.add( this.reticle );
 
+        this.object = new THREE.Mesh( new THREE.IcosahedronGeometry( 1, 0 ), new THREE.MeshNormalMaterial( { flatShading: true } ) );
+        this.object.scale.set( scale, scale, scale );
+        this.object.position.set( x, y, z );
+
         this.box = new THREE.Mesh( new THREE.BoxGeometry( 100, 100, 100, 4, 4, 4 ), new THREE.MeshBasicMaterial( { color: 0xffff00, wireframe: true, opacity: 0.9 } ) );
-        this.box.visible = false;
 
         this.scene = new THREE.Scene();
         this.scene.add( new THREE.AmbientLight( 0x808080 ) );
         this.scene.add( new THREE.HemisphereLight( 0x404040, 0xf0f0f0, 1 ) );
         this.scene.add( this.camera );
+        this.scene.add( this.object );
         this.scene.add( this.box );
+
+        this.cameraPositionCurr = new THREE.Vector3( 0, 0, 0 );
+        this.cameraPositionPrev = new THREE.Vector3( 0, 0, 0 );
 
         container.appendChild( this.renderer.domElement );
 
@@ -97,15 +107,13 @@ class ARIMUView
         render();
     }
 
-    updateCameraRotation( alpha, beta, gamma, screenAngle )
+    updateCameraPose( pose, alpha, beta, gamma, screenAngle )
     {
-        const orient = THREE.MathUtils.degToRad( screenAngle );
-
+        const orientation = THREE.MathUtils.degToRad( screenAngle );
         const axis = new THREE.Vector3( 0, 0, 1 );
         const euler = new THREE.Euler();
         const q0 = new THREE.Quaternion();
         const q1 = new THREE.Quaternion( -Math.sqrt( 0.5 ), 0, 0, Math.sqrt( 0.5 ) ); // - PI/2 around the x-axis
-        const EPS = 0.000001;
 
         // 'ZXY' for the device, but 'YXZ' for us
         euler.set( beta, alpha, -gamma, 'YXZ' );
@@ -117,21 +125,27 @@ class ARIMUView
         this.camera.quaternion.multiply( q1 );
 
         // adjust for screen orientation
-        this.camera.quaternion.multiply( q0.setFromAxisAngle( axis, -orient ) );
-
-        this.box.visible = true;
+        this.camera.quaternion.multiply( q0.setFromAxisAngle( axis, -orientation ) );
 
         this.prevQuaternion = this.prevQuaternion || new THREE.Quaternion();
 
-        if( 8 * (1 - this.prevQuaternion.dot( this.camera.quaternion )) > EPS )
+        if( 8 * (1 - this.prevQuaternion.dot( this.camera.quaternion )) > 0.000001 )
         {
             this.prevQuaternion.copy( this.camera.quaternion );
         }
-    }
 
-    lostCamera()
-    {
-        this.box.visible = false;
+        this.cameraPositionPrev.copy( this.cameraPositionCurr );
+
+        if( pose )
+        {
+            this.applyPose( pose, null, this.cameraPositionCurr );
+        }
+
+        this.camera.position.set(
+            this.camera.position.x + this.cameraPositionCurr.x - this.cameraPositionPrev.x,
+            this.camera.position.y + this.cameraPositionCurr.y - this.cameraPositionPrev.y,
+            this.camera.position.z + this.cameraPositionCurr.z - this.cameraPositionPrev.z
+        );
     }
 }
 
@@ -169,7 +183,7 @@ class ARSimpleView
 
     updateCameraPose( pose )
     {
-        this.applyPose( this.camera, pose );
+        this.applyPose( pose, this.camera.quaternion, this.camera.position );
 
         this.renderer.render( this.scene, this.camera );
 
@@ -186,7 +200,7 @@ class ARSimpleView
         const obj = new THREE.Mesh( new THREE.IcosahedronGeometry( 1, 0 ), new THREE.MeshNormalMaterial( { flatShading: true } ) );
         obj.scale.set( scale, scale, scale );
 
-        this.applyPose( obj, pose );
+        this.applyPose( pose, obj.quaternion, obj.position );
 
         this.scene.add( obj );
 
