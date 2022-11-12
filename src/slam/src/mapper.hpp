@@ -24,7 +24,7 @@ struct Keyframe
     void displayInfo()
     {
         std::cout << "\n\n Keyframe id #" << keyframeId_;
-        std::cout << " - im size : " << image_.size;
+        std::cout << " - image size : " << image_.size;
         std::cout << " - pyramid size : " << imagePyramid_.size() << "\n\n";
     }
 

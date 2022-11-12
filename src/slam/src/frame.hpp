@@ -45,26 +45,36 @@ public:
 
     Frame(const Frame &frame);
 
-    void updateFrame(const int id, const double imgTimestamp);
+    // Set the image imgTimestamp and id
+    void updateFrame(const int id, const double timestamp);
 
+    // Return vector of keypoint objects
     std::vector<Keypoint> getKeypoints() const;
 
+    // Return vector of 2D keypoint objects
     std::vector<Keypoint> getKeypoints2d() const;
 
+    // Return vector of 3D keypoint objects
     std::vector<Keypoint> getKeypoints3d() const;
 
+    // Return vector of keypoints' raw pixel positions
     std::vector<cv::Point2f> getKeypointsPx() const;
 
+    // Return vector of keypoints' undistorted pixel positions
     std::vector<cv::Point2f> getKeypointsUnPx() const;
 
     Keypoint getKeypointById(const int keypointId) const;
 
+    // Compute keypoint from raw pixel position
     void computeKeypoint(const cv::Point2f &point, Keypoint &keypoint);
 
+    // Create keypoint from raw pixel position
     Keypoint computeKeypoint(const cv::Point2f &point, const int keypointId);
 
+    // Add keypoint object to vector of kps
     void addKeypoint(const Keypoint &keypoint);
 
+    // Add new keypoint from raw pixel position
     void addKeypoint(const cv::Point2f &pt, const int keypointId);
 
     void addKeypoint(const cv::Point2f &point, const int keypointId, const cv::Mat &descriptor);
@@ -144,7 +154,7 @@ public:
     // Frame info
     int id_;
     int keyframeId_;
-    double imageTimestamp_;
+    double timestamp_;
 
     // Map of observed keypoints
     std::unordered_map<int, Keypoint> mapKeypoints_;

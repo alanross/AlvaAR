@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no" name="viewport"/>
+    <meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+    <title>AlvaAR IMU</title>
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            font-family: 'Helvetica', sans-serif;
+            overflow: hidden;
+            background: #000;
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: block;
+            overflow: hidden;
+            line-height: 0;
+        }
+
+        #container > * {
+            position: absolute;
+            display: block;
+            user-select: none;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            animation: fadeIn 1.2s;
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        #container > video {
+            object-fit: cover;
+            object-position: 50% 50%;
+        }
+
+        #splash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            opacity: 1;
+        }
+
+        #overlay {
+            position: absolute;
+            font-size: 16px;
+            z-index: 2;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        #overlay button {
+            background: transparent;
+            border: 1px solid rgb(255, 255, 255);
+            border-radius: 4px;
+            color: #ffffff;
+            padding: 12px 18px;
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+
+        @keyframes fadeIn {
+            0% {
+                opacity: 0;
+            }
+            50% {
+                opacity: 0.6;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+
+        @media screen and (max-device-width: 480px) and (orientation: landscape) {
+            #container {
+                display: none;
+            }
+
+            body::before {
+                content: "Rotate device to portrait mode.";
+                color: white;
+            }
+        }
+
+        @media screen and (max-device-width: 480px) and (orientation: portrait) {
+            #container {
+                display: block;
+            }
+
+            body::before {
+                content: none;
+            }
+        }
+    </style>
+</head>
+<body>
+<div id="container"></div>
+<div id="overlay">
+    <button id="start_button">Start</button>
+    <div id="splash"></div>
+</div>
+<script type="module">
+    import { Stats } from "./assets/stats.js";
+    import { AlvaAR } from './assets/alva_ar.js';
+    import { ARIMUView } from "./assets/view.js";
+    import { DeviceOrientationSensor, } from "./assets/orientation.js";
+    import { Camera, onFrame, resize2cover } from "./assets/utils.js";
+
+    function main()
+    {
+        const config = {
+            video: {
+                facingMode: 'environment',
+                aspectRatio: 16 / 9,
+                width: { ideal: 1280 }
+            },
+            audio: false
+        }
+
+        const $container = document.getElementById( 'container' );
+        const $view = document.createElement( 'div' );
+        const $canvas = document.createElement( 'canvas' );
+        const $overlay = document.getElementById( 'overlay' );
+        const $start = document.getElementById( 'start_button' );
+        const $splash = document.getElementById( 'splash' );
+        const splashFadeTime = 800;
+
+        $splash.style.transition = `opacity ${ splashFadeTime / 1000 }s ease`;
+        $splash.style.opacity = 0;
+
+        async function demo( media, sensor )
+        {
+            const $video = media.el;
+
+            const size = resize2cover( $video.videoWidth, $video.videoHeight, $container.clientWidth, $container.clientHeight );
+
+            $canvas.width = $container.clientWidth;
+            $canvas.height = $container.clientHeight;
+            $video.style.width = size.width + 'px';
+            $video.style.height = size.height + 'px';
+
+            const ctx = $canvas.getContext( '2d', { alpha: false, desynchronized: true } );
+            const alva = await AlvaAR.Initialize( $canvas.width, $canvas.height );
+            const view = new ARIMUView( $view, $canvas.width, $canvas.height );
+
+            Stats.add( 'total' );
+
+            $container.appendChild( $canvas );
+            $container.appendChild( $view );
+
+            document.body.appendChild( Stats.el );
+            document.body.addEventListener( "click", () => alva.reset(), false );
+
+            onFrame( () =>
+            {
+                Stats.next();
+                Stats.start( 'total' );
+
+                ctx.clearRect( 0, 0, $canvas.width, $canvas.height );
+
+                if( !document['hidden'] && sensor.screenOrientationAngle === 0 )
+                {
+                    ctx.drawImage( $video, 0, 0, $video.videoWidth, $video.videoHeight, size.x, size.y, size.width, size.height );
+
+                    const pose = alva.findCameraPose( ctx.getImageData( 0, 0, $canvas.width, $canvas.height ) );
+
+                    if( !pose )
+                    {
+                        const dots = alva.getFramePoints();
+
+                        for( const p of dots )
+                        {
+                            ctx.fillStyle = 'white';
+                            ctx.fillRect( p.x, p.y, 2, 2 );
+                        }
+                    }
+
+                    view.updateCameraPose(
+                        pose,
+                        sensor.deviceOrientationAlpha,
+                        sensor.deviceOrientationBeta,
+                        sensor.deviceOrientationGamma,
+                        sensor.screenOrientationAngle
+                    );
+                }
+
+                Stats.stop( 'total' );
+                Stats.render();
+
+                return true;
+            }, 30 );
+        }
+
+        setTimeout( () =>
+        {
+            $splash.remove();
+
+            $start.addEventListener( 'click', async () =>
+            {
+                try
+                {
+                    $overlay.remove();
+
+                    const sensor = await DeviceOrientationSensor.Initialize();
+                    const media = await Camera.Initialize( config );
+
+                    await demo( media, sensor );
+                } catch( error )
+                {
+                    alert( 'Error: ' + error );
+                }
+            }, { once: true } );
+
+        }, splashFadeTime );
+    }
+
+    window.addEventListener( 'load', main );
+</script>
+</body>
+</html>

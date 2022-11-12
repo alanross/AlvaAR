@@ -27,7 +27,7 @@ void MapManager::prepareFrame()
     currFrame_->keyframeId_ = numKeyframeIds_;
 
     // Filter if too many keypoints
-    if ((int) currFrame_->numKeypoints_ > state_->frame_max_num_kps_)
+    if ((int) currFrame_->numKeypoints_ > state_->frameMaxNumKeypoints_)
     {
         for (const auto &keypointIds: currFrame_->gridKeypointsIds_)
         {
@@ -42,7 +42,7 @@ void MapManager::prepareFrame()
 
                     if (iterator != mapMapPoints_.end())
                     {
-                        size_t numObs = iterator->second->getKeyframeObsSet().size();
+                        size_t numObs = iterator->second->getObservedKeyframeIds().size();
 
                         if (numObs < minNumObs)
                         {
@@ -76,7 +76,7 @@ void MapManager::prepareFrame()
         }
 
         // Relate new keyframe id to the map point
-        iterator->second->addKeyframeObs(numKeyframeIds_);
+        iterator->second->addObservedKeyframeId(numKeyframeIds_);
     }
 }
 
@@ -99,7 +99,7 @@ void MapManager::updateFrameCovisibility(Frame &frame)
         }
 
         // Get the set of keyframes observing this keyframe to update covisible keyframes
-        for (const auto &kfid: iterator->second->getKeyframeObsSet())
+        for (const auto &kfid: iterator->second->getObservedKeyframeIds())
         {
             if (kfid != frame.keyframeId_)
             {
@@ -218,14 +218,14 @@ void MapManager::extractKeypoints(const cv::Mat &image, const cv::Mat &imageRaw)
 
     describeKeypoints(imageRaw, keypoints, points);
 
-    int numToDetect = state_->frame_max_num_kps_ - currFrame_->numOccupiedCells_;
+    int numToDetect = state_->frameMaxNumKeypoints_ - currFrame_->numOccupiedCells_;
 
     if (numToDetect > 0)
     {
         // Detect kps in the provided images using the cur kps and img roi to set a mask
         std::vector<cv::Point2f> newPoints;
 
-        newPoints = featureExtractor_->detectSingleScale(image, state_->frame_max_cell_size_, points, currFrame_->cameraCalibration_->roi_rect_);
+        newPoints = featureExtractor_->detectSingleScale(image, state_->frameMaxCellSize_, points, currFrame_->cameraCalibration_->roi_rect_);
 
         if (!newPoints.empty())
         {
@@ -388,7 +388,7 @@ void MapManager::updateMapPoint(const int mapPointId, const Eigen::Vector3d &wpt
     // if map point 2d -> 3d => notify keyframes
     if (!mapPointIterator->second->is3d_)
     {
-        for (const auto &keyframeId: mapPointIterator->second->getKeyframeObsSet())
+        for (const auto &keyframeId: mapPointIterator->second->getObservedKeyframeIds())
         {
             auto keyframes = mapKeyframes_.find(keyframeId);
             if (keyframes != mapKeyframes_.end())
@@ -397,7 +397,7 @@ void MapManager::updateMapPoint(const int mapPointId, const Eigen::Vector3d &wpt
             }
             else
             {
-                mapPointIterator->second->removeKfObs(keyframeId);
+                mapPointIterator->second->removeObservedKeyframeId(keyframeId);
             }
         }
 
@@ -455,9 +455,9 @@ void MapManager::addMapPointKeyframeObs(const int mapPointId, const int keyframe
         return;
     }
 
-    plmit->second->addKeyframeObs(keyframeId);
+    plmit->second->addObservedKeyframeId(keyframeId);
 
-    for (const auto &cokfid: plmit->second->getKeyframeObsSet())
+    for (const auto &cokfid: plmit->second->getObservedKeyframeIds())
     {
         if (cokfid != keyframeId)
         {
@@ -469,13 +469,13 @@ void MapManager::addMapPointKeyframeObs(const int mapPointId, const int keyframe
             }
             else
             {
-                plmit->second->removeKfObs(cokfid);
+                plmit->second->removeObservedKeyframeId(cokfid);
             }
         }
     }
 }
 
-void MapManager::mergeMapPoints(const int prevMapPointId, const int newMapPointId)
+void MapManager::mergeMapPoints(const int prvMapPointId, const int newMapPointId)
 {
     // 1. Get Kf obs + descs from prev map point
     // 2. Remove prev map point
@@ -483,50 +483,38 @@ void MapManager::mergeMapPoints(const int prevMapPointId, const int newMapPointI
 
     // Get prev map point to merge into new map point
 
-    auto pprevlmit = mapMapPoints_.find(prevMapPointId);
-    auto pnewlmit = mapMapPoints_.find(newMapPointId);
+    auto prvLmIt = mapMapPoints_.find(prvMapPointId);
+    auto newLmIt = mapMapPoints_.find(newMapPointId);
 
-    if (pprevlmit == mapMapPoints_.end())
+    if (prvLmIt == mapMapPoints_.end())
     {
-        if (state_->debug_)
-        {
-            std::cout << "\nMergeMapPoints skipping as prevlm is null\n";
-        }
         return;
     }
-    else if (pnewlmit == mapMapPoints_.end())
+    else if (newLmIt == mapMapPoints_.end())
     {
-        if (state_->debug_)
-        {
-            std::cout << "\nMergeMapPoints skipping as newlm is null\n";
-        }
         return;
     }
-    else if (!pnewlmit->second->is3d_)
+    else if (!newLmIt->second->is3d_)
     {
-        if (state_->debug_)
-        {
-            std::cout << "\nMergeMapPoints skipping as newlm is not 3d\n";
-        }
         return;
     }
 
     // 1. Get Kf obs + descs from prev map point
-    std::set<int> setnewkfids = pnewlmit->second->getKeyframeObsSet();
-    std::set<int> setprevkfids = pprevlmit->second->getKeyframeObsSet();
-    std::unordered_map<int, cv::Mat> map_prev_kf_desc_ = pprevlmit->second->mapKeyframeDescriptors_;
+    std::set<int> nextKfIds = newLmIt->second->getObservedKeyframeIds();
+    std::set<int> prevKfIds = prvLmIt->second->getObservedKeyframeIds();
+    std::unordered_map<int, cv::Mat> map_prev_kf_desc_ = prvLmIt->second->mapKeyframeDescriptors_;
 
     // 3. Update new map point and related keyframe / cur Frame
-    for (const auto &pkfid: setprevkfids)
+    for (const auto &pkfid: prevKfIds)
     {
         // Get prev keyframe and update keypoint
         auto pkfit = mapKeyframes_.find(pkfid);
         if (pkfit != mapKeyframes_.end())
         {
-            if (pkfit->second->updateKeypointId(prevMapPointId, newMapPointId, pnewlmit->second->is3d_))
+            if (pkfit->second->updateKeypointId(prvMapPointId, newMapPointId, newLmIt->second->is3d_))
             {
-                pnewlmit->second->addKeyframeObs(pkfid);
-                for (const auto &nkfid: setnewkfids)
+                newLmIt->second->addObservedKeyframeId(pkfid);
+                for (const auto &nkfid: nextKfIds)
                 {
                     auto pcokfit = mapKeyframes_.find(nkfid);
                     if (pcokfit != mapKeyframes_.end())
@@ -541,26 +529,26 @@ void MapManager::mergeMapPoints(const int prevMapPointId, const int newMapPointI
 
     for (const auto &kfid_desc: map_prev_kf_desc_)
     {
-        pnewlmit->second->addDesc(kfid_desc.first, kfid_desc.second);
+        newLmIt->second->addDesc(kfid_desc.first, kfid_desc.second);
     }
 
-    // Turn new map point observed by cur Frame if prev map point
-    // was + update cur Frame's kp ref to new map point
-    if (currFrame_->isObservingKp(prevMapPointId))
+    // Turn new map point observed by curr frame if prev map point
+    // was + update curr frame's keypoint reference to new map point
+    if (currFrame_->isObservingKp(prvMapPointId))
     {
-        if (currFrame_->updateKeypointId(prevMapPointId, newMapPointId, pnewlmit->second->is3d_))
+        if (currFrame_->updateKeypointId(prvMapPointId, newMapPointId, newLmIt->second->is3d_))
         {
             setMapPointObs(newMapPointId);
         }
     }
 
-    if (pprevlmit->second->is3d_)
+    if (prvLmIt->second->is3d_)
     {
         numMapPoints_--;
     }
 
     // Erase map point and update nb map points
-    mapMapPoints_.erase(pprevlmit);
+    mapMapPoints_.erase(prvLmIt);
 
     Point3D point;
     point = Point3D();
@@ -571,13 +559,14 @@ void MapManager::mergeMapPoints(const int prevMapPointId, const int newMapPointI
     point.y = 0.0;
     point.z = 0.0;
 
-    pointCloud_[prevMapPointId] = point;
+    pointCloud_[prvMapPointId] = point;
 }
 
 void MapManager::removeKeyframe(const int keyframeId)
 {
     // Get keyframe to remove
     auto pkfit = mapKeyframes_.find(keyframeId);
+
     // Skip if keyframe does not exist
     if (pkfit == mapKeyframes_.end())
     {
@@ -593,8 +582,9 @@ void MapManager::removeKeyframe(const int keyframeId)
         {
             continue;
         }
-        plmit->second->removeKfObs(keyframeId);
+        plmit->second->removeObservedKeyframeId(keyframeId);
     }
+
     for (const auto &kfid_cov: pkfit->second->getCovisibleKeyframeMap())
     {
         auto pcokfit = mapKeyframes_.find(kfid_cov.first);
@@ -618,20 +608,22 @@ void MapManager::removeMapPoint(const int mapPointId)
 {
     // Get related map point
     auto plmit = mapMapPoints_.find(mapPointId);
+
     // Skip if map point does not exist
     if (plmit != mapMapPoints_.end())
     {
         // Remove all observations from keyframes
-        for (const auto &kfid: plmit->second->getKeyframeObsSet())
+        for (const auto &kfid: plmit->second->getObservedKeyframeIds())
         {
             auto pkfit = mapKeyframes_.find(kfid);
             if (pkfit == mapKeyframes_.end())
             {
                 continue;
             }
+
             pkfit->second->removeKeypointById(mapPointId);
 
-            for (const auto &cokfid: plmit->second->getKeyframeObsSet())
+            for (const auto &cokfid: plmit->second->getObservedKeyframeIds())
             {
                 if (cokfid != kfid)
                 {
@@ -684,11 +676,11 @@ void MapManager::removeMapPointObs(const int mapPointId, const int keyframeId)
     {
         return;
     }
-    plmit->second->removeKfObs(keyframeId);
+    plmit->second->removeObservedKeyframeId(keyframeId);
 
     if (pkfit != mapKeyframes_.end())
     {
-        for (const auto &cokfid: plmit->second->getKeyframeObsSet())
+        for (const auto &cokfid: plmit->second->getObservedKeyframeIds())
         {
             auto pcokfit = mapKeyframes_.find(cokfid);
             if (pcokfit != mapKeyframes_.end())
@@ -703,9 +695,9 @@ void MapManager::removeMapPointObs(const int mapPointId, const int keyframeId)
 void MapManager::removeMapPointObs(MapPoint &mapPoint, Frame &frame)
 {
     frame.removeKeypointById(mapPoint.mapPointId_);
-    mapPoint.removeKfObs(frame.keyframeId_);
+    mapPoint.removeObservedKeyframeId(frame.keyframeId_);
 
-    for (const auto &cokfid: mapPoint.getKeyframeObsSet())
+    for (const auto &cokfid: mapPoint.getObservedKeyframeIds())
     {
         if (cokfid != frame.keyframeId_)
         {
@@ -725,25 +717,25 @@ void MapManager::removeObsFromCurrFrameById(const int mapPointId)
     currFrame_->removeKeypointById(mapPointId);
 
     // Set map point as not obs
-    auto plmit = mapMapPoints_.find(mapPointId);
+    auto iterator = mapMapPoints_.find(mapPointId);
 
     Point3D point;
 
     // Skip if map point does not exist
-    if (plmit == mapMapPoints_.end())
+    if (iterator == mapMapPoints_.end())
     {
         // Set the map point at origin
         pointCloud_.at(mapPointId) = point;
         return;
     }
 
-    plmit->second->isObserved_ = false;
+    iterator->second->isObserved_ = false;
 
     // Update map point color
     point = Point3D();
-    point.r = plmit->second->color_[0];
-    point.g = plmit->second->color_[0];
-    point.b = plmit->second->color_[0];
+    point.r = iterator->second->color_[0];
+    point.g = iterator->second->color_[0];
+    point.b = iterator->second->color_[0];
     point.x = pointCloud_.at(mapPointId).x;
     point.y = pointCloud_.at(mapPointId).y;
     point.z = pointCloud_.at(mapPointId).z;
@@ -753,19 +745,19 @@ void MapManager::removeObsFromCurrFrameById(const int mapPointId)
 
 bool MapManager::setMapPointObs(const int mapPointId)
 {
-    auto plmit = mapMapPoints_.find(mapPointId);
+    auto iterator = mapMapPoints_.find(mapPointId);
 
     Point3D point;
 
     // Skip if map point does not exist
-    if (plmit == mapMapPoints_.end())
+    if (iterator == mapMapPoints_.end())
     {
         // Set the map point at origin
         pointCloud_.at(mapPointId) = point;
         return false;
     }
 
-    plmit->second->isObserved_ = true;
+    iterator->second->isObserved_ = true;
 
     // Update map point color
     point = Point3D();

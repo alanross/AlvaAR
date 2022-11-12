@@ -132,100 +132,11 @@
 </div>
 <script type="module">
     import { Stats } from "./assets/stats.js";
-    import { Camera, ARCamView, onFrame, isMobile, getDeviceOrientation, resize2cover } from "./assets/utils.js";
     import { AlvaAR } from './assets/alva_ar.js';
+    import { ARCamView } from "./assets/view.js";
+    import { Camera, onFrame, resize2cover } from "./assets/utils.js";
 
-    async function demo( media )
-    {
-        function onDeviceChange( event )
-        {
-            doRender = !(document['hidden'] ? true : isMobile() && getDeviceOrientation() !== 'portrait');
-        }
-
-        function onViewClick( event )
-        {
-            alva.reset();
-
-            return false;
-        }
-
-        function onRenderTick()
-        {
-            Stats.next();
-            Stats.start( 'total' );
-
-            ctx.clearRect( 0, 0, $canvas.width, $canvas.height );
-
-            if( doRender )
-            {
-                ctx.drawImage( $video, 0, 0, $video.videoWidth, $video.videoHeight, size.x, size.y, size.width, size.height );
-
-                const pose = alva.findCameraPose( ctx.getImageData( 0, 0, $canvas.width, $canvas.height ) );
-
-                if( pose )
-                {
-                    view.updateCameraPose( pose );
-                }
-                else
-                {
-                    view.lostCamera();
-
-                    const dots = alva.getFramePoints();
-
-                    for( const p of dots )
-                    {
-                        ctx.fillStyle = 'white';
-                        ctx.fillRect( p.x, p.y, 2, 2 );
-                    }
-                }
-            }
-
-            Stats.stop( 'total' );
-            Stats.render();
-
-            return true;
-        }
-
-        const $video = media.el;
-        const $container = document.getElementById( 'container' );
-        const $view = document.createElement( 'div' );
-        const $canvas = document.createElement( 'canvas' );
-
-        const ctx = $canvas.getContext( '2d', { alpha: false, desynchronized: true } );
-
-        let doRender = true;
-
-        const size = resize2cover( $video.videoWidth, $video.videoHeight, $container.clientWidth, $container.clientHeight );
-
-        $canvas.width = $container.clientWidth;
-        $canvas.height = $container.clientHeight;
-        $video.style.width = size.width + 'px';
-        $video.style.height = size.height + 'px';
-
-        const alva = await AlvaAR.Initialize( $canvas.width, $canvas.height );
-        const view = new ARCamView( $view, $canvas.width, $canvas.height );
-
-        $container.appendChild( $canvas );
-        $container.appendChild( $view );
-        document.body.appendChild( Stats.el );
-
-        document.addEventListener( "visibilitychange", onDeviceChange );
-        window.addEventListener( "orientationchange", onDeviceChange );
-        $view.addEventListener( 'click', onViewClick );
-
-        Stats.add( 'total' );
-
-        onDeviceChange();
-
-        onFrame( onRenderTick, 30 );
-    }
-
-    function showError( error )
-    {
-        alert( 'Error: ' + error );
-    }
-
-    function load()
+    function main()
     {
         const config = {
             video: {
@@ -244,6 +155,71 @@
         $splash.style.transition = `opacity ${ splashFadeTime / 1000 }s ease`;
         $splash.style.opacity = 0;
 
+        async function demo( media )
+        {
+            const $video = media.el;
+            const $container = document.getElementById( 'container' );
+            const $view = document.createElement( 'div' );
+            const $canvas = document.createElement( 'canvas' );
+
+            const ctx = $canvas.getContext( '2d', { alpha: false, desynchronized: true } );
+
+            const size = resize2cover( $video.videoWidth, $video.videoHeight, $container.clientWidth, $container.clientHeight );
+
+            $canvas.width = $container.clientWidth;
+            $canvas.height = $container.clientHeight;
+            $video.style.width = size.width + 'px';
+            $video.style.height = size.height + 'px';
+
+            const alva = await AlvaAR.Initialize( $canvas.width, $canvas.height );
+            const view = new ARCamView( $view, $canvas.width, $canvas.height );
+
+            Stats.add( 'total' );
+
+            $container.appendChild( $canvas );
+            $container.appendChild( $view );
+
+            document.body.appendChild( Stats.el );
+            document.body.addEventListener( "click", () => alva.reset(), false );
+
+            onFrame( () =>
+            {
+                Stats.next();
+                Stats.start( 'total' );
+
+                ctx.clearRect( 0, 0, $canvas.width, $canvas.height );
+
+                if( !document['hidden'] )
+                {
+                    ctx.drawImage( $video, 0, 0, $video.videoWidth, $video.videoHeight, size.x, size.y, size.width, size.height );
+
+                    const pose = alva.findCameraPose( ctx.getImageData( 0, 0, $canvas.width, $canvas.height ) );
+
+                    if( pose )
+                    {
+                        view.updateCameraPose( pose );
+                    }
+                    else
+                    {
+                        view.lostCamera();
+
+                        const dots = alva.getFramePoints();
+
+                        for( const p of dots )
+                        {
+                            ctx.fillStyle = 'white';
+                            ctx.fillRect( p.x, p.y, 2, 2 );
+                        }
+                    }
+                }
+
+                Stats.stop( 'total' );
+                Stats.render();
+
+                return true;
+            }, 30 );
+        }
+
         setTimeout( () =>
         {
             $splash.remove();
@@ -252,14 +228,14 @@
             {
                 $overlay.remove();
 
-                Camera.initialize( config ).then( media => demo( media ) ).catch( error => showError( 'Camera ' + error ) );
+                Camera.Initialize( config ).then( media => demo( media ) ).catch( error => alert( 'Camera ' + error ) );
 
             }, { once: true } );
 
         }, splashFadeTime );
     }
 
-    window.addEventListener( 'load', load );
+    window.addEventListener( 'load', main );
 </script>
 </body>
 </html>

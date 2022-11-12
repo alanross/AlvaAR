@@ -43,11 +43,11 @@ public:
 
     Eigen::Vector3d getPoint() const;
 
-    std::set<int> getKeyframeObsSet() const;
+    std::set<int> getObservedKeyframeIds() const;
 
-    void addKeyframeObs(const int keyframeId);
+    void addObservedKeyframeId(const int keyframeId);
 
-    void removeKfObs(const int keyframeId);
+    void removeObservedKeyframeId(const int keyframeId);
 
     void addDesc(const int keyframeId, const cv::Mat &descriptor);
 

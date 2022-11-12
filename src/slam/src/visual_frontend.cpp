@@ -6,9 +6,9 @@ VisualFrontend::VisualFrontend(std::shared_ptr<State> state, std::shared_ptr<Fra
         : state_(state), currFrame_(frame), mapManager_(mapManager), featureTracker_(featureTracker)
 {
     int tileSize = 50;
-    cv::Size clahe_tiles(state_->imgWidth_ / tileSize, state_->imgHeight_ / tileSize);
+    cv::Size claheGridSize(state_->imgWidth_ / tileSize, state_->imgHeight_ / tileSize);
 
-    clahe_ = cv::createCLAHE(state_->claheContrastLimit_, clahe_tiles);
+    clahe_ = cv::createCLAHE(state_->claheContrastLimit_, claheGridSize);
 }
 
 bool VisualFrontend::visualTracking(cv::Mat &image, double timestamp)
@@ -30,7 +30,6 @@ bool VisualFrontend::visualTracking(cv::Mat &image, double timestamp)
 
 bool VisualFrontend::track(cv::Mat &image, double timestamp)
 {
-    // Preprocess the new image
     preprocessImage(image);
 
     // Create keyframe if 1st frame processed
@@ -146,7 +145,7 @@ void VisualFrontend::kltTracking()
     // 1st track 3d kps if using prior
     if (state_->kltUsePrior_ && !v3dpriors.empty())
     {
-        int nbpyrlvl = 1;
+        int numPyramidLevels = 1;
 
         // Good / bad kps vector
         std::vector<bool> vkpstatus;
@@ -157,22 +156,22 @@ void VisualFrontend::kltTracking()
                 prevPyramid_,
                 currPyramid_,
                 state_->kltWinSizeWH_,
-                nbpyrlvl,
+                numPyramidLevels,
                 state_->kltError_,
                 state_->kltMaxFbDistance_,
                 v3dkps,
                 v3dpriors,
                 vkpstatus);
 
-        size_t nbgood = 0;
-        size_t nbkps = v3dkps.size();
+        size_t numGood = 0;
+        size_t numKeypoints = v3dkps.size();
 
-        for (size_t i = 0; i < nbkps; i++)
+        for (size_t i = 0; i < numKeypoints; i++)
         {
             if (vkpstatus.at(i))
             {
                 currFrame_->updateKeypoint(v3dkpids.at(i), v3dpriors.at(i));
-                nbgood++;
+                numGood++;
             }
             else
             {
@@ -185,10 +184,10 @@ void VisualFrontend::kltTracking()
 
         if (state_->debug_)
         {
-            std::cout << "- [Visual-Front-End]: KLT Tracking w. priors : " << nbgood << " out of " << nbkps << " kps tracked!\n";
+            std::cout << "- [Visual-Front-End]: KLT Tracking w. priors : " << numGood << " out of " << numKeypoints << " kps tracked!\n";
         }
 
-        if (nbgood < 0.33 * nbkps)
+        if (numGood < 0.33 * numKeypoints)
         {
             // Motion model might be quite wrong, P3P is recommended next and not using any prior
             p3pReq_ = true;
@@ -196,7 +195,7 @@ void VisualFrontend::kltTracking()
         }
     }
 
-    // 2nd track other kps if any
+    // 2nd track other keypoints if any
     if (!vkps.empty())
     {
         // Good / bad kps vector
@@ -213,15 +212,15 @@ void VisualFrontend::kltTracking()
                 vpriors,
                 vkpstatus);
 
-        size_t nbgood = 0;
-        size_t nbkps = vkps.size();
+        size_t numGood = 0;
+        size_t numKeypoints = vkps.size();
 
-        for (size_t i = 0; i < nbkps; i++)
+        for (size_t i = 0; i < numKeypoints; i++)
         {
             if (vkpstatus.at(i))
             {
                 currFrame_->updateKeypoint(vkpids.at(i), vpriors.at(i));
-                nbgood++;
+                numGood++;
             }
             else
             {
@@ -232,7 +231,7 @@ void VisualFrontend::kltTracking()
 
         if (state_->debug_)
         {
-            std::cout << "- [Visual-Front-End]: KLT Tracking no prior : " << nbgood << " out of " << nbkps << " kps tracked!\n";
+            std::cout << "- [Visual-Front-End]: KLT Tracking no prior : " << numGood << " out of " << numKeypoints << " kps tracked!\n";
         }
     }
 }
@@ -625,7 +624,7 @@ bool VisualFrontend::computePose()
     }
 
     Sophus::SE3d Twc = currFrame_->getTwc();
-    bool do_optimize = false;
+    bool doOptimize = false;
     bool success = false;
 
     if (doP3P)
@@ -643,14 +642,14 @@ bool VisualFrontend::computePose()
                 vbvs, vwpts,
                 state_->multiViewRansacNumIterations_,
                 state_->multiViewRansacError_,
-                do_optimize,
+                doOptimize,
                 state_->multiViewRandomEnabled_,
                 currFrame_->cameraCalibration_->fx_,
                 currFrame_->cameraCalibration_->fy_,
                 Twc,
                 voutliersidx,
                 true //use meds, only effective with OpenGV
-                );
+        );
 
         if (state_->debug_)
         {
@@ -679,13 +678,13 @@ bool VisualFrontend::computePose()
 
         // Remove outliers before PnP refinement (a bit dirty)
         int k = 0;
-        for (const auto &idx: voutliersidx)
+        for (const auto &index: voutliersidx)
         {
             // MapManager is responsible for all removing operations
-            mapManager_->removeObsFromCurrFrameById(vkpids.at(idx - k));
-            vkps.erase(vkps.begin() + idx - k);
-            vwpts.erase(vwpts.begin() + idx - k);
-            vkpids.erase(vkpids.begin() + idx - k);
+            mapManager_->removeObsFromCurrFrameById(vkpids.at(index - k));
+            vkps.erase(vkps.begin() + index - k);
+            vwpts.erase(vwpts.begin() + index - k);
+            vkpids.erase(vkpids.begin() + index - k);
             k++;
         }
 
@@ -698,7 +697,8 @@ bool VisualFrontend::computePose()
     size_t maxIterations = 5;
 
     success = MultiViewGeometry::ceresPnP(
-            vkps, vwpts,
+            vkps,
+            vwpts,
             Twc,
             maxIterations,
             state_->baRobustThreshold_,
@@ -757,9 +757,9 @@ bool VisualFrontend::checkReadyForInit()
 
     if (avgComputedRotParallax > state_->minAvgRotationParallax_)
     {
-        // get prev keyframe
-        auto pkf = mapManager_->mapKeyframes_.at(currFrame_->keyframeId_);
-        if (pkf == nullptr)
+        auto prevKeyframe = mapManager_->mapKeyframes_.at(currFrame_->keyframeId_);
+
+        if (prevKeyframe == nullptr)
         {
             return false;
         }
@@ -783,7 +783,7 @@ bool VisualFrontend::checkReadyForInit()
         vkfbvs.reserve(numKeypoints);
         vcurbvs.reserve(numKeypoints);
 
-        Eigen::Matrix3d Rkfcur = pkf->getTcw().rotationMatrix() * currFrame_->getTwc().rotationMatrix();
+        Eigen::Matrix3d Rkfcur = prevKeyframe->getTcw().rotationMatrix() * currFrame_->getTwc().rotationMatrix();
         int numParallax = 0;
         float avgRotParallax = 0.;
 
@@ -793,7 +793,7 @@ bool VisualFrontend::checkReadyForInit()
             auto &kp = it.second;
 
             // get the prev keyframe related kp if it exists
-            auto kfkp = pkf->getKeypointById(kp.keypointId_);
+            auto kfkp = prevKeyframe->getKeypointById(kp.keypointId_);
 
             if (kfkp.keypointId_ != kp.keypointId_)
             {
@@ -898,7 +898,7 @@ bool VisualFrontend::checkNewKeyframeRequired()
     // Id diff with last keyframe
     int numImFromKeyframe = currFrame_->id_ - pkf->id_;
 
-    if (currFrame_->numOccupiedCells_ < 0.33 * state_->frame_max_num_kps_ && numImFromKeyframe >= 5 && !state_->localBAActive_)
+    if (currFrame_->numOccupiedCells_ < 0.33 * state_->frameMaxNumKeypoints_ && numImFromKeyframe >= 5 && !state_->localBAActive_)
     {
         return true;
     }
@@ -908,7 +908,7 @@ bool VisualFrontend::checkNewKeyframeRequired()
         return true;
     }
 
-    if (currFrame_->numKeypoints3d_ > 0.5 * state_->frame_max_num_kps_ && (state_->localBAActive_ || numImFromKeyframe < 2))
+    if (currFrame_->numKeypoints3d_ > 0.5 * state_->frameMaxNumKeypoints_ && (state_->localBAActive_ || numImFromKeyframe < 2))
     {
         return false;
     }
@@ -917,7 +917,7 @@ bool VisualFrontend::checkNewKeyframeRequired()
 
     bool c0 = med_rot_parallax >= state_->minAvgRotationParallax_;
     bool c1 = currFrame_->numKeypoints3d_ < 0.75 * pkf->numKeypoints3d_;
-    bool c2 = currFrame_->numOccupiedCells_ < 0.5 * state_->frame_max_num_kps_ && currFrame_->numKeypoints3d_ < 0.85 * pkf->numKeypoints3d_ && !state_->localBAActive_;
+    bool c2 = currFrame_->numOccupiedCells_ < 0.5 * state_->frameMaxNumKeypoints_ && currFrame_->numKeypoints3d_ < 0.85 * pkf->numKeypoints3d_ && !state_->localBAActive_;
 
     bool keyFrameRequired = (c0 || c1 || c2) && cx;
 

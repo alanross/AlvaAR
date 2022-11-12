@@ -108,7 +108,8 @@
 <script type="module">
     import { Stats } from "./assets/stats.js";
     import { AlvaAR } from './assets/alva_ar.js';
-    import { Video, ARSimpleView, ARSimpleMap, onFrame } from "./assets/utils.js";
+    import { ARSimpleView, ARSimpleMap } from "./assets/view.js";
+    import { Video, onFrame } from "./assets/utils.js";
 
     async function main()
     {
@@ -117,7 +118,7 @@
         Stats.add( 'video' );
         Stats.add( 'slam' );
 
-        const media = await Video.initialize( './assets/video.mp4' );
+        const media = await Video.Initialize( './assets/video.mp4' );
         const alva = await AlvaAR.Initialize( media.width, media.height );
 
         const $cam = document.getElementById( 'renderer-cam' );

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import * as THREE from 'https://threejsfundamentals.org/threejs/resources/threejs/r132/build/three.module.js';
 import { OrbitControls } from 'https://threejsfundamentals.org/threejs/resources/threejs/r132/examples/jsm/controls/OrbitControls.js';
 
@@ -14,6 +15,10 @@ function applyPose(obj, pose) {
     obj.quaternion.set(-q.x, q.y, q.z, q.w);
     obj.position.set(t.x, -t.y, -t.z);
 }
+=======
+const rad2deg = 180.0 / Math.PI;
+const deg2rad = Math.PI / 180;
+>>>>>>> a0b644a33aa86896d189f3cc6e00af50524b2a1c
 
 function onFrame(frameTickFn, fps = 30) {
     const fpsInterval = ~~(1000 / fps);
@@ -38,16 +43,34 @@ function onFrame(frameTickFn, fps = 30) {
     requestAnimationFrame(onAnimationFrame);
 }
 
+<<<<<<< HEAD
 function isMobile() {
     try {
         document.createEvent('TouchEvent');
+=======
+function isIOS()
+{
+    return /iPad|iPhone|iPod/.test( navigator.platform );
+}
+
+function isMobile()
+{
+    try
+    {
+        document.createEvent( 'TouchEvent' );
+>>>>>>> a0b644a33aa86896d189f3cc6e00af50524b2a1c
         return true;
     } catch (e) {
         return false;
     }
 }
 
+<<<<<<< HEAD
 function getDeviceOrientation() {
+=======
+function getScreenOrientation()
+{
+>>>>>>> a0b644a33aa86896d189f3cc6e00af50524b2a1c
     let angle = -1;
 
     if (window.screen && window.screen.orientation) {
@@ -103,10 +126,20 @@ function createCanvas(width, height) {
     return canvas;
 }
 
+<<<<<<< HEAD
 class Camera {
     static async initialize(constraints = null) {
         if ('facingMode' in constraints && 'deviceId' in constraints) {
             throw new Error(`Camera settings 'deviceId' and 'facingMode' are mutually exclusive.`);
+=======
+class Camera
+{
+    static async Initialize( constraints = null )
+    {
+        if( 'facingMode' in constraints && 'deviceId' in constraints )
+        {
+            throw new Error( `Camera settings 'deviceId' and 'facingMode' are mutually exclusive.` );
+>>>>>>> a0b644a33aa86896d189f3cc6e00af50524b2a1c
         }
 
         if ('facingMode' in constraints && ['environment', 'user'].indexOf(constraints.facingMode) === -1) {
@@ -200,8 +233,13 @@ class Camera {
         this.width = videoElement.videoWidth;
         this.height = videoElement.videoHeight;
 
+<<<<<<< HEAD
         this._canvas = createCanvas(this.width, this.height);
         this._ctx = this._canvas.getContext('2d');
+=======
+        this._canvas = createCanvas( this.width, this.height );
+        this._ctx = this._canvas.getContext( '2d', { willReadFrequently: true } );
+>>>>>>> a0b644a33aa86896d189f3cc6e00af50524b2a1c
     }
 
     getImageData() {
@@ -212,9 +250,18 @@ class Camera {
     }
 }
 
+<<<<<<< HEAD
 class Video {
     static async initialize(url, timeout = 8000) {
         return new Promise((resolve, reject) => {
+=======
+class Video
+{
+    static async Initialize( url, timeout = 8000 )
+    {
+        return new Promise( ( resolve, reject ) =>
+        {
+>>>>>>> a0b644a33aa86896d189f3cc6e00af50524b2a1c
             let tid = -1;
 
             const video = document.createElement('video');
@@ -273,8 +320,13 @@ class Video {
         this.width = videoElement.videoWidth;
         this.height = videoElement.videoHeight;
 
+<<<<<<< HEAD
         this._canvas = createCanvas(this.width, this.height);
         this._ctx = this._canvas.getContext('2d');
+=======
+        this._canvas = createCanvas( this.width, this.height );
+        this._ctx = this._canvas.getContext( '2d', { willReadFrequently: true } );
+>>>>>>> a0b644a33aa86896d189f3cc6e00af50524b2a1c
 
         this._lastTime = -1;
         this._imageData = null;
@@ -300,6 +352,7 @@ class Video {
     }
 }
 
+<<<<<<< HEAD
 class ARCamView {
     constructor(container, width, height, x = 0, y = 0, z = -1, scale = 0.1) {
         this.renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true });
@@ -448,3 +501,6 @@ class ARSimpleMap {
 }
 
 export { ARCamView, ARSimpleView, ARSimpleMap, Camera, Video, onFrame, isMobile, getDeviceOrientation, resize2cover }
+=======
+export { Camera, Video, onFrame, isMobile, isIOS, getScreenOrientation, resize2cover, rad2deg, deg2rad }
+>>>>>>> a0b644a33aa86896d189f3cc6e00af50524b2a1c
