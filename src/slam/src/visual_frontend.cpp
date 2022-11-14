@@ -898,7 +898,7 @@ bool VisualFrontend::checkNewKeyframeRequired()
     // Id diff with last keyframe
     int numImFromKeyframe = currFrame_->id_ - pkf->id_;
 
-    if (currFrame_->numOccupiedCells_ < 0.33 * state_->frameMaxNumKeypoints_ && numImFromKeyframe >= 5 && !state_->localBAActive_)
+    if (currFrame_->numOccupiedCells_ < 0.33 * state_->frameMaxNumKeypoints_ && numImFromKeyframe >= 5)
     {
         return true;
     }
@@ -908,7 +908,7 @@ bool VisualFrontend::checkNewKeyframeRequired()
         return true;
     }
 
-    if (currFrame_->numKeypoints3d_ > 0.5 * state_->frameMaxNumKeypoints_ && (state_->localBAActive_ || numImFromKeyframe < 2))
+    if (currFrame_->numKeypoints3d_ > 0.5 * state_->frameMaxNumKeypoints_ && numImFromKeyframe < 2)
     {
         return false;
     }
@@ -917,7 +917,7 @@ bool VisualFrontend::checkNewKeyframeRequired()
 
     bool c0 = med_rot_parallax >= state_->minAvgRotationParallax_;
     bool c1 = currFrame_->numKeypoints3d_ < 0.75 * pkf->numKeypoints3d_;
-    bool c2 = currFrame_->numOccupiedCells_ < 0.5 * state_->frameMaxNumKeypoints_ && currFrame_->numKeypoints3d_ < 0.85 * pkf->numKeypoints3d_ && !state_->localBAActive_;
+    bool c2 = currFrame_->numOccupiedCells_ < 0.5 * state_->frameMaxNumKeypoints_ && currFrame_->numKeypoints3d_ < 0.85 * pkf->numKeypoints3d_;
 
     bool keyFrameRequired = (c0 || c1 || c2) && cx;
 

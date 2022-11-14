@@ -36,10 +36,6 @@ public:
 
     // Number of common observations required for opt. a keyframe in localBA
     int localBAMinNumCommonKeypointsObservations = 25;
-    bool localBAActive_ = true;
-
-    bool loopClosureActive_ = false;
-    int loopClosureKeyframeId_ = -1;
 
     float minAvgRotationParallax_ = 40.0;
 

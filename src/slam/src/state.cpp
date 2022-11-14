@@ -25,8 +25,6 @@ State::State(double imgWidth, double imgHeight )
 
 void State::reset()
 {
-    localBAActive_ = false;
-    loopClosureActive_ = false;
     slamReadyForInit_ = false;
     slamResetRequested_ = false;
 }

@@ -61,13 +61,7 @@ void Estimator::applyLocalBA()
         return;
     }
 
-    // signal that Estimator is performing BA
-    state_->localBAActive_ = true;
-
     optimizer_->localBA(*newKeyframe_, true);
-
-    // signal that Estimator is stopping BA
-    state_->localBAActive_ = false;
 }
 
 void Estimator::mapFiltering()
@@ -77,7 +71,7 @@ void Estimator::mapFiltering()
         return;
     }
 
-    if (newKeyframe_->keyframeId_ < 20 || state_->loopClosureActive_)
+    if (newKeyframe_->keyframeId_ < 20)
     {
         return;
     }
@@ -94,12 +88,6 @@ void Estimator::mapFiltering()
         }
 
         if (kfid >= newKeyframe_->keyframeId_)
-        {
-            continue;
-        }
-
-        // only useful if loop closing enabled
-        if (state_->loopClosureKeyframeId_ == kfid)
         {
             continue;
         }
@@ -153,12 +141,6 @@ void Estimator::mapFiltering()
 
         if (ratio > state_->mapKeyframeFilteringRatio)
         {
-            // only useful if loop closing enabled
-            if (state_->loopClosureKeyframeId_ == kfid)
-            {
-                continue;
-            }
-
             mapManager_->removeKeyframe(kfid);
         }
     }
