@@ -49,9 +49,9 @@ void Estimator::addNewKeyframe(const std::shared_ptr<Frame> &keyframe)
 
 void Estimator::applyLocalBA()
 {
-    int nmincstkfs = 2;
+    int minNumKeyframes = 2;
 
-    if (newKeyframe_->keyframeId_ < nmincstkfs)
+    if (newKeyframe_->keyframeId_ < minNumKeyframes)
     {
         return;
     }
@@ -66,7 +66,7 @@ void Estimator::applyLocalBA()
 
 void Estimator::mapFiltering()
 {
-    if (state_->mapKeyframeFilteringRatio >= 1.)
+    if (state_->mapKeyframeFilteringRatio_ >= 1.)
     {
         return;
     }
@@ -98,7 +98,7 @@ void Estimator::mapFiltering()
             newKeyframe_->removeCovisibleKeyframe(kfid);
             continue;
         }
-        else if ((int) pkf->numKeypoints3d_ < state_->localBAMinNumCommonKeypointsObservations / 2)
+        else if ((int) pkf->numKeypoints3d_ < state_->localBAMinNumCommonKeypointsObservations_ / 2)
         {
             mapManager_->removeKeyframe(kfid);
             continue;
@@ -139,7 +139,7 @@ void Estimator::mapFiltering()
 
         float ratio = (float) numGoodObservations / numTotal;
 
-        if (ratio > state_->mapKeyframeFilteringRatio)
+        if (ratio > state_->mapKeyframeFilteringRatio_)
         {
             mapManager_->removeKeyframe(kfid);
         }

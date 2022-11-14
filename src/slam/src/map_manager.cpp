@@ -132,7 +132,7 @@ void MapManager::updateFrameCovisibility(Frame &frame)
             // Set the unobserved local map for future tracking
             for (const auto &kp: iterator->second->getKeypoints3d())
             {
-                if (!frame.isObservingKp(kp.keypointId_))
+                if (!frame.isObservingKeypoint(kp.keypointId_))
                 {
                     localMapIds.insert(kp.keypointId_);
                 }
@@ -534,7 +534,7 @@ void MapManager::mergeMapPoints(const int prvMapPointId, const int newMapPointId
 
     // Turn new map point observed by curr frame if prev map point
     // was + update curr frame's keypoint reference to new map point
-    if (currFrame_->isObservingKp(prvMapPointId))
+    if (currFrame_->isObservingKeypoint(prvMapPointId))
     {
         if (currFrame_->updateKeypointId(prvMapPointId, newMapPointId, newLmIt->second->is3d_))
         {

@@ -35,7 +35,7 @@ public:
     bool slamResetRequested_ = false;
 
     // Number of common observations required for opt. a keyframe in localBA
-    int localBAMinNumCommonKeypointsObservations = 25;
+    int localBAMinNumCommonKeypointsObservations_ = 25;
 
     float minAvgRotationParallax_ = 40.0;
 
@@ -65,7 +65,7 @@ public:
     float mapMaxDescriptorDistance_ = 0.2;
     float mapMaxProjectionPxDistance_ = 2.0;
     float mapMaxReprojectionError_ = 3.0;
-    float mapKeyframeFilteringRatio = 0.95;
+    float mapKeyframeFilteringRatio_ = 0.95;
 
     bool multiViewRandomEnabled_ = true;
     float multiViewRansacError_ = 3.0;

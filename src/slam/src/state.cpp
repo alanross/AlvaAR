@@ -7,7 +7,7 @@ State::State(double imgWidth, double imgHeight )
 
     frameMaxCellSize_ = 40;
     claheEnabled_ = false;
-    mapKeyframeFilteringRatio = 0.95;
+    mapKeyframeFilteringRatio_ = 0.95;
     p3pEnabled_ = true;
 
     float numCellsW = ceil((float) imgWidth_ / (float) frameMaxCellSize_);
@@ -19,7 +19,7 @@ State::State(double imgWidth, double imgHeight )
     std::cout << ", height: " << imgHeight;
     std::cout << ", Frame Max Cell Size: " << frameMaxCellSize_;
     std::cout << ", CLAHE Enabled: " << claheEnabled_;
-    std::cout << ", Map Keyframe Filtering Ratio: " << mapKeyframeFilteringRatio;
+    std::cout << ", Map Keyframe Filtering Ratio: " << mapKeyframeFilteringRatio_;
     std::cout << ", P3P Enabled: " << p3pEnabled_ << std::endl;
 }
 

@@ -103,7 +103,7 @@ public:
 
     void turnKeypoint3d(const int keypointId);
 
-    bool isObservingKp(const int keypointId) const;
+    bool isObservingKeypoint(const int keypointId) const;
 
     Sophus::SE3d getTcw() const;
 

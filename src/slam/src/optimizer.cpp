@@ -19,7 +19,7 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
     }
 
     // Thresh. score for optimizing / fixing a keyframe in BA (cov score with new keyframe)
-    int minCovScore = state_->localBAMinNumCommonKeypointsObservations;
+    int minCovScore = state_->localBAMinNumCommonKeypointsObservations_;
 
     // Do not optimize if tracking is poor (hopefully will get better soon!)
     if ((int) newFrame.numKeypoints3d_ < minCovScore)

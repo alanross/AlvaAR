@@ -397,7 +397,7 @@ std::map<int, int> Mapper::matchToMap(const Frame &frame, const float maxProject
             break;
         }
 
-        if (frame.isObservingKp(mapPointId))
+        if (frame.isObservingKeypoint(mapPointId))
         {
             continue;
         }

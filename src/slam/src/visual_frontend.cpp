@@ -889,33 +889,29 @@ bool VisualFrontend::checkNewKeyframeRequired()
 
     auto pkf = pkfit->second;
 
-    // Compute median parallax
-    double med_rot_parallax = 0.0;
-
-    // unrot : false / median : true / only_2d : false
-    med_rot_parallax = computeParallax(pkf->keyframeId_, true, true, false);
+    // Compute median parallax unrot : false / median : true / only_2d : false
+    double medianRotParallax = computeParallax(pkf->keyframeId_, true, true, false);
 
     // Id diff with last keyframe
-    int numImFromKeyframe = currFrame_->id_ - pkf->id_;
+    int diffBetweenKeyframes = currFrame_->id_ - pkf->id_;
 
-    if (currFrame_->numOccupiedCells_ < 0.33 * state_->frameMaxNumKeypoints_ && numImFromKeyframe >= 5)
+    if (currFrame_->numOccupiedCells_ < 0.33 * state_->frameMaxNumKeypoints_ && diffBetweenKeyframes >= 5)
     {
         return true;
     }
 
-    if (currFrame_->numKeypoints3d_ < 20 && numImFromKeyframe >= 2)
+    if (currFrame_->numKeypoints3d_ < 20 && diffBetweenKeyframes >= 2)
     {
         return true;
     }
 
-    if (currFrame_->numKeypoints3d_ > 0.5 * state_->frameMaxNumKeypoints_ && numImFromKeyframe < 2)
+    if (currFrame_->numKeypoints3d_ > 0.5 * state_->frameMaxNumKeypoints_ && diffBetweenKeyframes < 2)
     {
         return false;
     }
 
-    bool cx = med_rot_parallax >= state_->minAvgRotationParallax_ / 2.;
-
-    bool c0 = med_rot_parallax >= state_->minAvgRotationParallax_;
+    bool cx = medianRotParallax >= state_->minAvgRotationParallax_ / 2.;
+    bool c0 = medianRotParallax >= state_->minAvgRotationParallax_;
     bool c1 = currFrame_->numKeypoints3d_ < 0.75 * pkf->numKeypoints3d_;
     bool c2 = currFrame_->numOccupiedCells_ < 0.5 * state_->frameMaxNumKeypoints_ && currFrame_->numKeypoints3d_ < 0.85 * pkf->numKeypoints3d_;
 
@@ -927,7 +923,7 @@ bool VisualFrontend::checkNewKeyframeRequired()
         std::cout << "\n>>> Check Keyframe conditions :";
         std::cout << "\n> curr_frame_->id_ = " << currFrame_->id_ << " / prev kf frame_id : " << pkf->id_;
         std::cout << "\n> prev keyframe nb 3d kps = " << pkf->numKeypoints3d_ << " / Cur Frame = " << currFrame_->numKeypoints3d_;
-        std::cout << " / curr frame occupied cells = " << currFrame_->numOccupiedCells_ << " / parallax = " << med_rot_parallax;
+        std::cout << " / curr frame occupied cells = " << currFrame_->numOccupiedCells_ << " / parallax = " << medianRotParallax;
         std::cout << "\n-------------------------------------------------------------------\n\n";
     }
 

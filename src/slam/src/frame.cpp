@@ -249,7 +249,7 @@ void Frame::turnKeypoint3d(const int keypointId)
     }
 }
 
-bool Frame::isObservingKp(const int keypointId) const
+bool Frame::isObservingKeypoint(const int keypointId) const
 {
     return mapKeypoints_.count(keypointId);
 }
