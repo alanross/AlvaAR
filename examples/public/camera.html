@@ -175,6 +175,8 @@
             const view = new ARCamView( $view, $canvas.width, $canvas.height );
 
             Stats.add( 'total' );
+            Stats.add( 'video' );
+            Stats.add( 'slam' );
 
             $container.appendChild( $canvas );
             $container.appendChild( $view );
@@ -191,9 +193,14 @@
 
                 if( !document['hidden'] )
                 {
+                    Stats.start( 'video' );
                     ctx.drawImage( $video, 0, 0, $video.videoWidth, $video.videoHeight, size.x, size.y, size.width, size.height );
+                    const frame = ctx.getImageData( 0, 0, $canvas.width, $canvas.height );
+                    Stats.stop( 'video' );
 
-                    const pose = alva.findCameraPose( ctx.getImageData( 0, 0, $canvas.width, $canvas.height ) );
+                    Stats.start( 'slam' );
+                    const pose = alva.findCameraPose( frame );
+                    Stats.stop( 'slam' );
 
                     if( pose )
                     {
