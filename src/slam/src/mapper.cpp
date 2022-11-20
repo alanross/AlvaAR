@@ -50,7 +50,7 @@ void Mapper::addNewKeyframe(const Keyframe &keyframe)
     }
 
     // Send new keyframe to estimator for BA
-    estimator_->addNewKeyframe(newKeyframe);
+    estimator_->optimize(newKeyframe);
 }
 
 void Mapper::triangulateTemporal(Frame &frame)

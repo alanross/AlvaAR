@@ -1,99 +1,86 @@
 #include "estimator.hpp"
 
-void Estimator::addNewKeyframe(const std::shared_ptr<Frame> &keyframe)
+void Estimator::optimize(const std::shared_ptr<Frame> &keyframe)
 {
     timedOperationStart();
 
-    newKeyframe_ = keyframe;
-
-    applyLocalBA();
-    applyMapFiltering();
-}
-
-void Estimator::applyLocalBA()
-{
-    if (newKeyframe_->keyframeId_ < 2 || newKeyframe_->numKeypoints3d_ == 0)
+    // apply local BA
+    if (keyframe->keyframeId_ >= 2 && keyframe->numKeypoints3d_ != 0)
     {
-        return;
+        optimizer_->localBA(*keyframe, true);
     }
 
-    optimizer_->localBA(*newKeyframe_, true);
-}
-
-void Estimator::applyMapFiltering()
-{
-    if (state_->mapKeyframeFilteringRatio_ >= 1.0 || newKeyframe_->keyframeId_ < 20)
+    // apply map filtering
+    if (state_->mapKeyframeFilteringRatio_ < 1.0 && keyframe->keyframeId_ >= 20)
     {
-        return;
-    }
+        auto covisibleKeyframeMap = keyframe->getCovisibleKeyframeMap();
 
-    auto covisibleKeyframeMap = newKeyframe_->getCovisibleKeyframeMap();
-
-    for (auto it = covisibleKeyframeMap.rbegin(); it != covisibleKeyframeMap.rend(); it++)
-    {
-        int keyframeId = it->first;
-
-        if (timedOperationHasTimedOut() || keyframeId == 0)
+        for (auto it = covisibleKeyframeMap.rbegin(); it != covisibleKeyframeMap.rend(); it++)
         {
-            break;
-        }
+            int keyframeId = it->first;
 
-        if (keyframeId >= newKeyframe_->keyframeId_)
-        {
-            continue;
-        }
-
-        auto keyframe = mapManager_->getKeyframe(keyframeId);
-        if (keyframe == nullptr)
-        {
-            newKeyframe_->removeCovisibleKeyframe(keyframeId);
-            continue;
-        }
-        else if ((int) keyframe->numKeypoints3d_ < state_->localBAMinNumCommonKeypointsObservations_ / 2)
-        {
-            mapManager_->removeKeyframe(keyframeId);
-            continue;
-        }
-
-        size_t numGoodObservations = 0;
-        size_t numTotal = 0;
-
-        for (const auto &kp: keyframe->getKeypoints3d())
-        {
-            auto mapPoint = mapManager_->getMapPoint(kp.keypointId_);
-
-            if (mapPoint == nullptr)
-            {
-                mapManager_->removeMapPointObs(kp.keypointId_, keyframeId);
-                continue;
-            }
-            else if (mapPoint->isBad())
-            {
-                continue;
-            }
-            else
-            {
-                size_t numObservedKeyframeIds = mapPoint->getObservedKeyframeIds().size();
-
-                if (numObservedKeyframeIds > 4)
-                {
-                    numGoodObservations++;
-                }
-            }
-
-            numTotal++;
-
-            if (timedOperationHasTimedOut())
+            if (timedOperationHasTimedOut() || keyframeId == 0)
             {
                 break;
             }
-        }
 
-        float ratio = (float) numGoodObservations / (float) numTotal;
+            if (keyframeId >= keyframe->keyframeId_)
+            {
+                continue;
+            }
 
-        if (ratio > state_->mapKeyframeFilteringRatio_)
-        {
-            mapManager_->removeKeyframe(keyframeId);
+            auto keyframe = mapManager_->getKeyframe(keyframeId);
+            if (keyframe == nullptr)
+            {
+                keyframe->removeCovisibleKeyframe(keyframeId);
+                continue;
+            }
+            else if ((int) keyframe->numKeypoints3d_ < state_->localBAMinNumCommonKeypointsObservations_ / 2)
+            {
+                mapManager_->removeKeyframe(keyframeId);
+                continue;
+            }
+
+            size_t numGoodObservations = 0;
+            size_t numTotal = 0;
+
+            for (const auto &kp: keyframe->getKeypoints3d())
+            {
+                auto mapPoint = mapManager_->getMapPoint(kp.keypointId_);
+
+                if (mapPoint == nullptr)
+                {
+                    mapManager_->removeMapPointObs(kp.keypointId_, keyframeId);
+                    continue;
+                }
+                else if (mapPoint->isBad())
+                {
+                    continue;
+                }
+                else
+                {
+                    size_t numObservedKeyframeIds = mapPoint->getObservedKeyframeIds().size();
+
+                    if (numObservedKeyframeIds > 4)
+                    {
+                        numGoodObservations++;
+                    }
+                }
+
+                numTotal++;
+
+                if (timedOperationHasTimedOut())
+                {
+                    break;
+                }
+            }
+
+            float ratio = (float) numGoodObservations / (float) numTotal;
+
+            if (ratio > state_->mapKeyframeFilteringRatio_)
+            {
+                mapManager_->removeKeyframe(keyframeId);
+            }
         }
     }
 }

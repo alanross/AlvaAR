@@ -13,11 +13,7 @@ public:
     {
     }
 
-    void applyLocalBA();
-
-    void applyMapFiltering();
-
-    void addNewKeyframe(const std::shared_ptr<Frame> &keyframe);
+    void optimize(const std::shared_ptr<Frame> &keyframe);
 
     void timedOperationStart();
 
