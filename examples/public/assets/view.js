@@ -70,14 +70,10 @@ class ARIMUView
         this.renderer.setSize( width, height );
         this.renderer.setPixelRatio( window.devicePixelRatio );
 
-        this.reticle = new THREE.Mesh( new THREE.RingBufferGeometry( 0.005, 0.01, 15 ), new THREE.MeshBasicMaterial( { color: 0xffffff } ) );
-        this.reticle.position.z = -0.5;
-
         this.camera = new THREE.PerspectiveCamera( 75, width / height, 0.1, 1000 );
         this.camera.rotation.reorder( 'YXZ' );
         this.camera.position.set( 0, 0, 1 );
         this.camera.updateProjectionMatrix();
-        this.camera.add( this.reticle );
 
         this.object = new THREE.Mesh( new THREE.IcosahedronGeometry( 1, 0 ), new THREE.MeshNormalMaterial( { flatShading: true } ) );
         this.object.scale.set( scale, scale, scale );
