@@ -15,6 +15,7 @@ public:
 
     void localBA(Frame &newFrame, const bool useRobustCost);
 
+private:
     std::shared_ptr<State> state_;
     std::shared_ptr<MapManager> mapManager_;
 };

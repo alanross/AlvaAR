@@ -79,6 +79,9 @@ public:
 
     bool visualTracking(cv::Mat &image, double timestamp);
 
+    void reset();
+
+private:
     // Perform tracking in one image, update kps and map point obs, return true if a new keyframe is req.
     bool track(cv::Mat &image, double timestamp);
 
@@ -102,8 +105,6 @@ public:
     bool checkNewKeyframeRequired();
 
     void resetFrame();
-
-    void reset();
 
     std::shared_ptr<State> state_;
     std::shared_ptr<Frame> currFrame_;
