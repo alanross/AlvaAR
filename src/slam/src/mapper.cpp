@@ -7,90 +7,50 @@ Mapper::Mapper(std::shared_ptr<State> state, std::shared_ptr<MapManager> mapMana
 {
 }
 
-bool Mapper::getNewKeyframe(Keyframe &keyframe)
-{
-    // Check if new keyframe is available
-    if (keyframeQueue_.empty())
-    {
-        newKeyframeAvailable_ = false;
-        return false;
-    }
-
-    // Get new keyframe and signal BA to stop if
-    // it is still processing the previous keyframe
-    keyframe = keyframeQueue_.front();
-    keyframeQueue_.pop();
-
-    // Setting newKeyframeAvailable_ to true will limit
-    // the processing of the keyframe to triangulation and postpone
-    // other costly tasks to next keyframe as we are running late!
-    if (keyframeQueue_.empty())
-    {
-        newKeyframeAvailable_ = false;
-    }
-    else
-    {
-        newKeyframeAvailable_ = true;
-    }
-
-    return true;
-}
-
 void Mapper::addNewKeyframe(const Keyframe &keyframe)
 {
     timedOperationStart();
 
-    keyframeQueue_.push(keyframe);
+    // Get new kf ptr
+    std::shared_ptr<Frame> newKeyframe = mapManager_->getKeyframe(keyframe.keyframeId_);
+    assert(newKeyframe);
 
-    newKeyframeAvailable_ = true;
-
-    Keyframe kf;
-
-    if (getNewKeyframe(kf))
+    // Triangulate temporal
+    if (newKeyframe->numKeypoints2d_ > 0 && newKeyframe->keyframeId_ > 0)
     {
-        // Get new kf ptr
-        std::shared_ptr<Frame> newKeyframe = mapManager_->getKeyframe(kf.keyframeId_);
-        assert(newKeyframe);
-
-        // Triangulate temporal
-        if (newKeyframe->numKeypoints2d_ > 0 && newKeyframe->keyframeId_ > 0)
-        {
-            triangulateTemporal(*newKeyframe);
-        }
-
-        // check if reset is required
-        if (state_->slamReadyForInit_)
-        {
-            if (kf.keyframeId_ == 1 && newKeyframe->numKeypoints3d_ < 30)
-            {
-                std::cout << "- [Mapper]: Bad initialization detected! Resetting." << std::endl;
-                state_->slamResetRequested_ = true;
-                reset();
-                return;
-            }
-            else if (kf.keyframeId_ < 10 && newKeyframe->numKeypoints3d_ < 3)
-            {
-                std::cout << "- [Mapper]: Reset required : Num 3D kps:" << newKeyframe->numKeypoints3d_ << std::endl;
-                state_->slamResetRequested_ = true;
-                reset();
-                return;
-            }
-        }
-
-        // Update the map points and the covisible graph between keyframes
-        mapManager_->updateFrameCovisibility(*newKeyframe);
-
-        // Dirty but useful for visualization
-        currFrame_->covisibleKeyframeIds_ = newKeyframe->covisibleKeyframeIds_;
-
-        if (kf.keyframeId_ > 0 && !timedOperationHasTimedOut())
-        {
-            matchingToLocalMap(*newKeyframe);
-        }
-
-        // Send new keyframe to estimator for BA
-        estimator_->addNewKeyframe(newKeyframe);
+        triangulateTemporal(*newKeyframe);
     }
+
+    // check if reset is required
+    if (state_->slamReadyForInit_)
+    {
+        if (keyframe.keyframeId_ == 1 && newKeyframe->numKeypoints3d_ < 30)
+        {
+            std::cout << "- [Mapper]: Reset Requested - Bad initialization detected! " << std::endl;
+            state_->slamResetRequested_ = true;
+            return;
+        }
+        else if (keyframe.keyframeId_ < 10 && newKeyframe->numKeypoints3d_ < 3)
+        {
+            std::cout << "- [Mapper]: Reset Requested - Num 3D kps:" << newKeyframe->numKeypoints3d_ << std::endl;
+            state_->slamResetRequested_ = true;
+            return;
+        }
+    }
+
+    // Update the map points and the covisible graph between keyframes
+    mapManager_->updateFrameCovisibility(*newKeyframe);
+
+    // Dirty but useful for visualization
+    currFrame_->covisibleKeyframeIds_ = newKeyframe->covisibleKeyframeIds_;
+
+    if (keyframe.keyframeId_ > 0 && !timedOperationHasTimedOut())
+    {
+        matchingToLocalMap(*newKeyframe);
+    }
+
+    // Send new keyframe to estimator for BA
+    estimator_->addNewKeyframe(newKeyframe);
 }
 
 void Mapper::triangulateTemporal(Frame &frame)
@@ -595,14 +555,6 @@ std::map<int, int> Mapper::matchToMap(const Frame &frame, const float maxProject
     }
 
     return mapPrevIdNewId;
-}
-
-void Mapper::reset()
-{
-    newKeyframeAvailable_ = false;
-
-    std::queue<Keyframe> empty;
-    std::swap(keyframeQueue_, empty);
 }
 
 void Mapper::timedOperationStart()

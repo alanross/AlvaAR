@@ -56,11 +56,7 @@ public:
 
     void triangulateTemporal(Frame &frame);
 
-    bool getNewKeyframe(Keyframe &keyframe);
-
     void addNewKeyframe(const Keyframe &keyframe);
-
-    void reset();
 
     void timedOperationStart();
 
@@ -70,9 +66,6 @@ public:
     std::shared_ptr<Frame> currFrame_;
     std::shared_ptr<MapManager> mapManager_;
     std::shared_ptr<Estimator> estimator_;
-    std::queue<Keyframe> keyframeQueue_;
-
-    bool newKeyframeAvailable_ = false;
 
     std::chrono::high_resolution_clock::time_point timedOperationStartTime_;
 };

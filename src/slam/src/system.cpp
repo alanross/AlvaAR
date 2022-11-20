@@ -35,7 +35,6 @@ void System::reset()
     currFrame_->reset();
     visualFrontend_->reset();
     mapManager_->reset();
-    mapper_->reset();
     state_->reset();
 
     frameId_ = -1;
