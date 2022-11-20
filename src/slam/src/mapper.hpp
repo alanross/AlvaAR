@@ -6,7 +6,6 @@
 #include "map_manager.hpp"
 #include "multi_view_geometry.hpp"
 #include "optimizer.hpp"
-#include "estimator.hpp"
 
 struct Keyframe
 {
@@ -48,15 +47,18 @@ public:
 
     Mapper(std::shared_ptr<State> state, std::shared_ptr<MapManager> mapManager, std::shared_ptr<Frame> frame);
 
+    void addNewKeyframe(const Keyframe &keyframe);
+
+private:
+    std::map<int, int> matchToMap(const Frame &frame, const float maxProjectionError, const float distRatio, std::unordered_set<int> &localMapPointIds);
+
     bool matchingToLocalMap(Frame &frame);
 
-    std::map<int, int> matchToMap(const Frame &frame, const float maxProjectionError, const float distRatio, std::unordered_set<int> &localMapPointIds);
+    void optimize(const std::shared_ptr<Frame> &keyframe);
 
     void mergeMatches(const Frame &frame, const std::map<int, int> &mapOfKeypointIdsAndMapPointIds);
 
     void triangulateTemporal(Frame &frame);
-
-    void addNewKeyframe(const Keyframe &keyframe);
 
     void timedOperationStart();
 
@@ -65,7 +67,7 @@ public:
     std::shared_ptr<State> state_;
     std::shared_ptr<Frame> currFrame_;
     std::shared_ptr<MapManager> mapManager_;
-    std::shared_ptr<Estimator> estimator_;
+    std::unique_ptr<Optimizer> optimizer_;
 
     std::chrono::high_resolution_clock::time_point timedOperationStartTime_;
 };

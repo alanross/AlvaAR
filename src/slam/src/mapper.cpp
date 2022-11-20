@@ -3,7 +3,7 @@
 #include <memory>
 
 Mapper::Mapper(std::shared_ptr<State> state, std::shared_ptr<MapManager> mapManager, std::shared_ptr<Frame> frame)
-        : state_(state), mapManager_(mapManager), currFrame_(frame), estimator_(new Estimator(state_, mapManager_))
+        : state_(state), mapManager_(mapManager), currFrame_(frame), optimizer_(new Optimizer(state_, mapManager_))
 {
 }
 
@@ -49,8 +49,94 @@ void Mapper::addNewKeyframe(const Keyframe &keyframe)
         matchingToLocalMap(*newKeyframe);
     }
 
-    // Send new keyframe to estimator for BA
-    estimator_->optimize(newKeyframe);
+    // do bundle adjustment and map filtering
+    optimize(newKeyframe);
+}
+
+void Mapper::optimize(const std::shared_ptr<Frame> &keyframe)
+{
+    // removing this will cause time of optimize to be counted as if being part of processNewKeyframe
+    timedOperationStart();
+
+    // apply local BA
+    if (keyframe->keyframeId_ >= 2 && keyframe->numKeypoints3d_ != 0)
+    {
+        optimizer_->localBA(*keyframe, true);
+    }
+
+    // apply map filtering
+    if (state_->mapKeyframeFilteringRatio_ < 1.0 && keyframe->keyframeId_ >= 20)
+    {
+        auto covisibleKeyframeMap = keyframe->getCovisibleKeyframeMap();
+
+        for (auto it = covisibleKeyframeMap.rbegin(); it != covisibleKeyframeMap.rend(); it++)
+        {
+            int keyframeId = it->first;
+
+            if (timedOperationHasTimedOut() || keyframeId == 0)
+            {
+                break;
+            }
+
+            if (keyframeId >= keyframe->keyframeId_)
+            {
+                continue;
+            }
+
+            auto keyframe = mapManager_->getKeyframe(keyframeId);
+            if (keyframe == nullptr)
+            {
+                keyframe->removeCovisibleKeyframe(keyframeId);
+                continue;
+            }
+            else if ((int) keyframe->numKeypoints3d_ < state_->localBAMinNumCommonKeypointsObservations_ / 2)
+            {
+                mapManager_->removeKeyframe(keyframeId);
+                continue;
+            }
+
+            size_t numGoodObservations = 0;
+            size_t numTotal = 0;
+
+            for (const auto &kp: keyframe->getKeypoints3d())
+            {
+                auto mapPoint = mapManager_->getMapPoint(kp.keypointId_);
+
+                if (mapPoint == nullptr)
+                {
+                    mapManager_->removeMapPointObs(kp.keypointId_, keyframeId);
+                    continue;
+                }
+                else if (mapPoint->isBad())
+                {
+                    continue;
+                }
+                else
+                {
+                    size_t numObservedKeyframeIds = mapPoint->getObservedKeyframeIds().size();
+
+                    if (numObservedKeyframeIds > 4)
+                    {
+                        numGoodObservations++;
+                    }
+                }
+
+                numTotal++;
+
+                if (timedOperationHasTimedOut())
+                {
+                    break;
+                }
+            }
+
+            float ratio = (float) numGoodObservations / (float) numTotal;
+
+            if (ratio > state_->mapKeyframeFilteringRatio_)
+            {
+                mapManager_->removeKeyframe(keyframeId);
+            }
+        }
+    }
 }
 
 void Mapper::triangulateTemporal(Frame &frame)
