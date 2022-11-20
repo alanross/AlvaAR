@@ -1,60 +1,18 @@
 #include "estimator.hpp"
 
-bool Estimator::getNewKeyframe()
-{
-    // check if new keyframe is available
-    if (keyframeQueue_.empty())
-    {
-        return false;
-    }
-
-    // only processed last received keyframe. Trick covscore if several keyframes were waiting
-    std::vector<int> keyframeIds;
-    keyframeIds.reserve(keyframeQueue_.size());
-
-    while (keyframeQueue_.size() > 1)
-    {
-        keyframeQueue_.pop();
-        keyframeIds.push_back(newKeyframe_->keyframeId_);
-    }
-
-    newKeyframe_ = keyframeQueue_.front();
-    keyframeQueue_.pop();
-
-    if (!keyframeIds.empty())
-    {
-        for (const auto &keyframeId: keyframeIds)
-        {
-            newKeyframe_->covisibleKeyframeIds_[keyframeId] = newKeyframe_->numKeypoints3d_;
-        }
-    }
-
-    return true;
-}
-
 void Estimator::addNewKeyframe(const std::shared_ptr<Frame> &keyframe)
 {
     timedOperationStart();
 
-    keyframeQueue_.push(keyframe);
+    newKeyframe_ = keyframe;
 
-    if (getNewKeyframe())
-    {
-        applyLocalBA();
-        mapFiltering();
-    }
+    applyLocalBA();
+    applyMapFiltering();
 }
 
 void Estimator::applyLocalBA()
 {
-    int minNumKeyframes = 2;
-
-    if (newKeyframe_->keyframeId_ < minNumKeyframes)
-    {
-        return;
-    }
-
-    if (newKeyframe_->numKeypoints3d_ == 0)
+    if (newKeyframe_->keyframeId_ < 2 || newKeyframe_->numKeypoints3d_ == 0)
     {
         return;
     }
@@ -62,66 +20,62 @@ void Estimator::applyLocalBA()
     optimizer_->localBA(*newKeyframe_, true);
 }
 
-void Estimator::mapFiltering()
+void Estimator::applyMapFiltering()
 {
-    if (state_->mapKeyframeFilteringRatio_ >= 1.)
+    if (state_->mapKeyframeFilteringRatio_ >= 1.0 || newKeyframe_->keyframeId_ < 20)
     {
         return;
     }
 
-    if (newKeyframe_->keyframeId_ < 20)
+    auto covisibleKeyframeMap = newKeyframe_->getCovisibleKeyframeMap();
+
+    for (auto it = covisibleKeyframeMap.rbegin(); it != covisibleKeyframeMap.rend(); it++)
     {
-        return;
-    }
+        int keyframeId = it->first;
 
-    auto covkf_map = newKeyframe_->getCovisibleKeyframeMap();
-
-    for (auto it = covkf_map.rbegin(); it != covkf_map.rend(); it++)
-    {
-        int kfid = it->first;
-
-        if (timedOperationHasTimedOut() || kfid == 0)
+        if (timedOperationHasTimedOut() || keyframeId == 0)
         {
             break;
         }
 
-        if (kfid >= newKeyframe_->keyframeId_)
+        if (keyframeId >= newKeyframe_->keyframeId_)
         {
             continue;
         }
 
-        auto pkf = mapManager_->getKeyframe(kfid);
-        if (pkf == nullptr)
+        auto keyframe = mapManager_->getKeyframe(keyframeId);
+        if (keyframe == nullptr)
         {
-            newKeyframe_->removeCovisibleKeyframe(kfid);
+            newKeyframe_->removeCovisibleKeyframe(keyframeId);
             continue;
         }
-        else if ((int) pkf->numKeypoints3d_ < state_->localBAMinNumCommonKeypointsObservations_ / 2)
+        else if ((int) keyframe->numKeypoints3d_ < state_->localBAMinNumCommonKeypointsObservations_ / 2)
         {
-            mapManager_->removeKeyframe(kfid);
+            mapManager_->removeKeyframe(keyframeId);
             continue;
         }
 
         size_t numGoodObservations = 0;
         size_t numTotal = 0;
 
-        for (const auto &kp: pkf->getKeypoints3d())
+        for (const auto &kp: keyframe->getKeypoints3d())
         {
-            auto plm = mapManager_->getMapPoint(kp.keypointId_);
+            auto mapPoint = mapManager_->getMapPoint(kp.keypointId_);
 
-            if (plm == nullptr)
+            if (mapPoint == nullptr)
             {
-                mapManager_->removeMapPointObs(kp.keypointId_, kfid);
+                mapManager_->removeMapPointObs(kp.keypointId_, keyframeId);
                 continue;
             }
-            else if (plm->isBad())
+            else if (mapPoint->isBad())
             {
                 continue;
             }
             else
             {
-                size_t nbcokfs = plm->getObservedKeyframeIds().size();
-                if (nbcokfs > 4)
+                size_t numObservedKeyframeIds = mapPoint->getObservedKeyframeIds().size();
+
+                if (numObservedKeyframeIds > 4)
                 {
                     numGoodObservations++;
                 }
@@ -135,19 +89,13 @@ void Estimator::mapFiltering()
             }
         }
 
-        float ratio = (float) numGoodObservations / numTotal;
+        float ratio = (float) numGoodObservations / (float) numTotal;
 
         if (ratio > state_->mapKeyframeFilteringRatio_)
         {
-            mapManager_->removeKeyframe(kfid);
+            mapManager_->removeKeyframe(keyframeId);
         }
     }
-}
-
-void Estimator::reset()
-{
-    std::queue<std::shared_ptr<Frame>> empty;
-    std::swap(keyframeQueue_, empty);
 }
 
 void Estimator::timedOperationStart()
