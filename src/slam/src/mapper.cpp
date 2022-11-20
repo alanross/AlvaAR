@@ -38,6 +38,8 @@ bool Mapper::getNewKeyframe(Keyframe &keyframe)
 
 void Mapper::addNewKeyframe(const Keyframe &keyframe)
 {
+    timedOperationStart();
+
     keyframeQueue_.push(keyframe);
 
     newKeyframeAvailable_ = true;
@@ -81,7 +83,7 @@ void Mapper::addNewKeyframe(const Keyframe &keyframe)
         // Dirty but useful for visualization
         currFrame_->covisibleKeyframeIds_ = newKeyframe->covisibleKeyframeIds_;
 
-        if (kf.keyframeId_ > 0 && !newKeyframeAvailable_)
+        if (kf.keyframeId_ > 0 && !timedOperationHasTimedOut())
         {
             matchingToLocalMap(*newKeyframe);
         }
@@ -264,14 +266,14 @@ bool Mapper::matchingToLocalMap(Frame &frame)
     {
         int keyframeId = covMap.begin()->first;
         auto keyframe = mapManager_->getKeyframe(keyframeId);
-        while (keyframe == nullptr && keyframeId > 0 && !newKeyframeAvailable_)
+        while (keyframe == nullptr && keyframeId > 0 && !timedOperationHasTimedOut())
         {
             keyframeId--;
             keyframe = mapManager_->getKeyframe(keyframeId);
         }
 
         // Skip if no time
-        if (newKeyframeAvailable_)
+        if (timedOperationHasTimedOut())
         {
             return false;
         }
@@ -285,14 +287,14 @@ bool Mapper::matchingToLocalMap(Frame &frame)
         if (keyframe->keyframeId_ > 0 && frame.localMapPointIds_.size() < 0.5 * maxNumLocalMapPoints)
         {
             keyframe = mapManager_->getKeyframe(keyframe->keyframeId_);
-            while (keyframe == nullptr && keyframeId > 0 && !newKeyframeAvailable_)
+            while (keyframe == nullptr && keyframeId > 0 && !timedOperationHasTimedOut())
             {
                 keyframeId--;
                 keyframe = mapManager_->getKeyframe(keyframeId);
             }
 
             // Skip if no time
-            if (newKeyframeAvailable_)
+            if (timedOperationHasTimedOut())
             {
                 return false;
             }
@@ -305,7 +307,7 @@ bool Mapper::matchingToLocalMap(Frame &frame)
     }
 
     // Skip if no time
-    if (newKeyframeAvailable_)
+    if (timedOperationHasTimedOut())
     {
         return false;
     }
@@ -392,7 +394,7 @@ std::map<int, int> Mapper::matchToMap(const Frame &frame, const float maxProject
     // Go through all map point from the local map
     for (const int mapPointId: localMapPointIds)
     {
-        if (newKeyframeAvailable_)
+        if (timedOperationHasTimedOut())
         {
             break;
         }
@@ -601,4 +603,17 @@ void Mapper::reset()
 
     std::queue<Keyframe> empty;
     std::swap(keyframeQueue_, empty);
+}
+
+void Mapper::timedOperationStart()
+{
+    timedOperationStartTime_ = std::chrono::high_resolution_clock::now();
+}
+
+bool Mapper::timedOperationHasTimedOut()
+{
+    auto now = std::chrono::high_resolution_clock::now();
+    auto dif = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - timedOperationStartTime_).count();
+
+    return (dif > 8);
 }

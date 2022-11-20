@@ -5,7 +5,6 @@ bool Estimator::getNewKeyframe()
     // check if new keyframe is available
     if (keyframeQueue_.empty())
     {
-        newKeyframeAvailable_ = false;
         return false;
     }
 
@@ -30,15 +29,14 @@ bool Estimator::getNewKeyframe()
         }
     }
 
-    newKeyframeAvailable_ = false;
-
     return true;
 }
 
 void Estimator::addNewKeyframe(const std::shared_ptr<Frame> &keyframe)
 {
+    timedOperationStart();
+
     keyframeQueue_.push(keyframe);
-    newKeyframeAvailable_ = true;
 
     if (getNewKeyframe())
     {
@@ -82,7 +80,7 @@ void Estimator::mapFiltering()
     {
         int kfid = it->first;
 
-        if (newKeyframeAvailable_ || kfid == 0)
+        if (timedOperationHasTimedOut() || kfid == 0)
         {
             break;
         }
@@ -131,7 +129,7 @@ void Estimator::mapFiltering()
 
             numTotal++;
 
-            if (newKeyframeAvailable_)
+            if (timedOperationHasTimedOut())
             {
                 break;
             }
@@ -148,8 +146,19 @@ void Estimator::mapFiltering()
 
 void Estimator::reset()
 {
-    newKeyframeAvailable_ = false;
-
     std::queue<std::shared_ptr<Frame>> empty;
     std::swap(keyframeQueue_, empty);
+}
+
+void Estimator::timedOperationStart()
+{
+    timedOperationStartTime_ = std::chrono::high_resolution_clock::now();
+}
+
+bool Estimator::timedOperationHasTimedOut()
+{
+    auto now = std::chrono::high_resolution_clock::now();
+    auto dif = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - timedOperationStartTime_).count();
+
+    return (dif > 8);
 }

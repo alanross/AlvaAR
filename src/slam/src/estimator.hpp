@@ -26,11 +26,15 @@ public:
 
     void addNewKeyframe(const std::shared_ptr<Frame> &keyframe);
 
+    void timedOperationStart();
+
+    bool timedOperationHasTimedOut();
+
     std::shared_ptr<State> state_;
     std::shared_ptr<MapManager> mapManager_;
     std::shared_ptr<Frame> newKeyframe_;
     std::unique_ptr<Optimizer> optimizer_;
     std::queue<std::shared_ptr<Frame>> keyframeQueue_;
 
-    bool newKeyframeAvailable_ = false;
+    std::chrono::high_resolution_clock::time_point timedOperationStartTime_;
 };

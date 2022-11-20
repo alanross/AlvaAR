@@ -62,6 +62,10 @@ public:
 
     void reset();
 
+    void timedOperationStart();
+
+    bool timedOperationHasTimedOut();
+
     std::shared_ptr<State> state_;
     std::shared_ptr<Frame> currFrame_;
     std::shared_ptr<MapManager> mapManager_;
@@ -69,4 +73,6 @@ public:
     std::queue<Keyframe> keyframeQueue_;
 
     bool newKeyframeAvailable_ = false;
+
+    std::chrono::high_resolution_clock::time_point timedOperationStartTime_;
 };
