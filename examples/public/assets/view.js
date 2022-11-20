@@ -8,7 +8,7 @@ class ARCamView
     {
         this.applyPose = AlvaARConnectorTHREE.Initialize( THREE );
 
-        this.renderer = new THREE.WebGLRenderer( { antialias: false, alpha: true } );
+        this.renderer = new THREE.WebGLRenderer( { antialias: true, alpha: true } );
         this.renderer.setClearColor( 0, 0 );
         this.renderer.setSize( width, height );
         this.renderer.setPixelRatio( window.devicePixelRatio );
@@ -22,7 +22,7 @@ class ARCamView
         this.object.position.set( x, y, z );
         this.object.visible = false;
 
-        this.box = new THREE.Mesh( new THREE.BoxGeometry( 100, 100, 100, 4, 4, 4 ), new THREE.MeshBasicMaterial( { color: 0xff00ff, wireframe: true, opacity: 0.9 } ) );
+        this.box = new THREE.Mesh( new THREE.BoxGeometry( 100, 100, 100, 4, 4, 4 ), new THREE.MeshBasicMaterial( { color: 0xff00ff, transparent: true, depthTest:true, wireframe: true, opacity: 0.4 } ) );
         this.box.visible = false;
 
         this.scene = new THREE.Scene();
@@ -65,7 +65,7 @@ class ARIMUView
     {
         this.applyPose = AlvaARConnectorTHREE.Initialize( THREE );
 
-        this.renderer = new THREE.WebGLRenderer( { antialias: false, alpha: true } );
+        this.renderer = new THREE.WebGLRenderer( { antialias: true, alpha: true } );
         this.renderer.setClearColor( 0, 0 );
         this.renderer.setSize( width, height );
         this.renderer.setPixelRatio( window.devicePixelRatio );
@@ -83,7 +83,7 @@ class ARIMUView
         this.object.scale.set( scale, scale, scale );
         this.object.position.set( x, y, z );
 
-        this.box = new THREE.Mesh( new THREE.BoxGeometry( 100, 100, 100, 4, 4, 4 ), new THREE.MeshBasicMaterial( { color: 0xffff00, wireframe: true, opacity: 0.9 } ) );
+        this.box = new THREE.Mesh( new THREE.BoxGeometry( 100, 100, 100, 4, 4, 4 ), new THREE.MeshBasicMaterial( { color: 0xff00ff, transparent: true, depthTest:true, wireframe: true, opacity: 0.4 } ) );
 
         this.scene = new THREE.Scene();
         this.scene.add( new THREE.AmbientLight( 0x808080 ) );
@@ -155,7 +155,7 @@ class ARSimpleView
     {
         this.applyPose = AlvaARConnectorTHREE.Initialize( THREE );
 
-        this.renderer = new THREE.WebGLRenderer( { antialias: false, alpha: true } );
+        this.renderer = new THREE.WebGLRenderer( { antialias: true, alpha: true } );
         this.renderer.setClearColor( 0, 0 );
         this.renderer.setSize( width, height );
         this.renderer.setPixelRatio( window.devicePixelRatio );
