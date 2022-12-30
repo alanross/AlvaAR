@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
-project(Alva)
+set(PROJECT_NAME "alva_ar")
+project(${PROJECT_NAME})
 
 # Use C++ 17 by default
 set(CMAKE_CXX_STANDARD 17)
@@ -7,39 +8,39 @@ set(CMAKE_CXX_STANDARD 17)
 # Ensure correct version of emscripten
 if ("${EMSCRIPTEN_VERSION}" VERSION_GREATER_EQUAL 3.0.0)
     message(STATUS "Using Emscripten version ${EMSCRIPTEN_VERSION}")
-else()
+else ()
     message(STATUS "Emscripten is not defined or it is older than version 3.0.0. Current version: '${EMSCRIPTEN_VERSION}'")
-endif()
+endif ()
 
-# Set Emscripten toolchain if not defined
+# Set Emscripten toolchain, if not defined
 if (NOT CMAKE_TOOLCHAIN_FILE)
-    message(STATUS "CMAKE_BUILD_TYPE not set. Using '~/Development/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake'")
+    message(STATUS "CMAKE_TOOLCHAIN_FILE not set. Using '~/Development/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake'")
     set(CMAKE_TOOLCHAIN_FILE "~/Development/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake")
 endif (NOT CMAKE_TOOLCHAIN_FILE)
 
-# Set "Release" as build type if not defined
+# Set "Release" as build type, if not defined
 if (NOT CMAKE_BUILD_TYPE)
     message(STATUS "CMAKE_BUILD_TYPE not set. Using 'Release'")
     set(CMAKE_BUILD_TYPE Release)
 endif (NOT CMAKE_BUILD_TYPE)
 
+# Set dist directory, if not defined
 if (NOT DIST_DIR)
     message(STATUS "DIST_DIR not set. Using './dist'")
     set(DIST_DIR ${CMAKE_BINARY_DIR}/../../../dist)
 endif (NOT DIST_DIR)
 
 set(LIBS_BUILD_FOLDER "../libs/build")
-set(PROJECT_NAME "alva_ar")
 
+include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/calib3d/include/)
 include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/core/include/)
-include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/objdetect/include/)
-include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/imgcodecs/include/)
-include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/imgproc/include/)
-include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/video/include/)
 include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/features2d/include/)
 include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/flann/include/)
-include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/calib3d/include/)
 include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/highgui/include/)
+include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/imgcodecs/include/)
+include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/imgproc/include/)
+include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/objdetect/include/)
+include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/video/include/)
 include_directories(${LIBS_BUILD_FOLDER}/opencv/)
 include_directories(${LIBS_BUILD_FOLDER}/opengv/include/)
 include_directories(${LIBS_BUILD_FOLDER}/eigen/include/eigen3)
@@ -56,6 +57,7 @@ file(GLOB LIB_OPENCV
         "${LIBS_BUILD_FOLDER}/opencv/lib/libopencv_calib3d.a"
         "${LIBS_BUILD_FOLDER}/opencv/lib/libopencv_core.a"
         "${LIBS_BUILD_FOLDER}/opencv/lib/libopencv_features2d.a"
+        "${LIBS_BUILD_FOLDER}/opencv/lib/libopencv_flann.a"
         "${LIBS_BUILD_FOLDER}/opencv/lib/libopencv_imgproc.a"
         "${LIBS_BUILD_FOLDER}/opencv/lib/libopencv_objdetect.a"
         "${LIBS_BUILD_FOLDER}/opencv/lib/libopencv_video.a")
@@ -97,6 +99,7 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
       -std=c++17 \
       -msimd128 \
       -O3 \
+      -Oz \
       --extern-post-js ../../system.js \
       --no-entry \
       --no-check-features \
@@ -123,6 +126,7 @@ else ()
       -std=c++17 \
       -msimd128 \
       -O3 \
+      -Oz \
       --extern-post-js ../../system.js \
       --no-entry \
       --no-check-features \
