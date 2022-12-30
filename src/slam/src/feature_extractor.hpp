@@ -13,9 +13,10 @@ public:
 
     FeatureExtractor(double maxQuality);
 
-    std::vector<cv::Mat> describeBRIEF(const cv::Mat &image, const std::vector<cv::Point2f> &points) const;
+    std::vector<cv::Point2f> detectFeaturePoints(const cv::Mat &image, const int cellSize, const std::vector<cv::Point2f> &currKeypoints, const cv::Rect &roi);
 
-    std::vector<cv::Point2f> detectSingleScale(const cv::Mat &image, const int cellSize, const std::vector<cv::Point2f> &currKeypoints, const cv::Rect &roi);
+    std::vector<cv::Mat> describeFeaturePoints(const cv::Mat &image, const std::vector<cv::Point2f> &points) const;
 
+private:
     double maxQuality_;
 };

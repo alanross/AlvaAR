@@ -225,12 +225,12 @@ void MapManager::extractKeypoints(const cv::Mat &image, const cv::Mat &imageRaw)
         // Detect kps in the provided images using the cur kps and img roi to set a mask
         std::vector<cv::Point2f> newPoints;
 
-        newPoints = featureExtractor_->detectSingleScale(image, state_->frameMaxCellSize_, points, currFrame_->cameraCalibration_->roi_rect_);
+        newPoints = featureExtractor_->detectFeaturePoints(image, state_->frameMaxCellSize_, points, currFrame_->cameraCalibration_->roi_rect_);
 
         if (!newPoints.empty())
         {
             std::vector<cv::Mat> vdescs;
-            vdescs = featureExtractor_->describeBRIEF(imageRaw, newPoints);
+            vdescs = featureExtractor_->describeFeaturePoints(imageRaw, newPoints);
             addKeypointsToFrame(image, newPoints, vdescs, *currFrame_);
         }
     }
@@ -241,7 +241,7 @@ void MapManager::describeKeypoints(const cv::Mat &image, const std::vector<Keypo
     size_t numKeypoints = keypoints.size();
     std::vector<cv::Mat> descriptors;
 
-    descriptors = featureExtractor_->describeBRIEF(image, points);
+    descriptors = featureExtractor_->describeFeaturePoints(image, points);
 
     assert(keypoints.size() == descriptors.size());
 

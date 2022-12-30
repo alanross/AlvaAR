@@ -2,69 +2,13 @@
 #include <algorithm>
 #include <iterator>
 
-cv::Ptr<cv::DescriptorExtractor> pbrief_;
+cv::Ptr<cv::DescriptorExtractor> descriptor_;
 
 FeatureExtractor::FeatureExtractor(double maxQuality) : maxQuality_(maxQuality)
 {
 }
 
-std::vector<cv::Mat> FeatureExtractor::describeBRIEF(const cv::Mat &image, const std::vector<cv::Point2f> &points) const
-{
-    if (points.empty())
-    {
-        return std::vector<cv::Mat>();
-    }
-
-    std::vector<cv::KeyPoint> keypoints;
-    size_t numKeypoints = points.size();
-    keypoints.reserve(numKeypoints);
-    std::vector<cv::Mat> descriptors;
-    descriptors.reserve(numKeypoints);
-
-    cv::KeyPoint::convert(points, keypoints);
-
-    cv::Mat descs;
-
-    if (pbrief_ == nullptr)
-    {
-        pbrief_ = cv::ORB::create(500, 1., 0);
-    }
-
-    pbrief_->compute(image, keypoints, descs);
-
-    if (keypoints.empty())
-    {
-        return std::vector<cv::Mat>(numKeypoints, cv::Mat());
-    }
-
-    size_t k = 0;
-
-    for (size_t i = 0; i < numKeypoints; i++)
-    {
-        if (k < keypoints.size())
-        {
-            if (keypoints[k].pt == points[i])
-            {
-                descriptors.push_back(descs.row(k));
-                k++;
-            }
-            else
-            {
-                descriptors.push_back(cv::Mat());
-            }
-        }
-        else
-        {
-            descriptors.push_back(cv::Mat());
-        }
-    }
-
-    assert(descriptors.size() == points.size());
-
-    return descriptors;
-}
-
-std::vector<cv::Point2f> FeatureExtractor::detectSingleScale(const cv::Mat &image, const int cellSize, const std::vector<cv::Point2f> &currKeypoints, const cv::Rect &roi)
+std::vector<cv::Point2f> FeatureExtractor::detectFeaturePoints(const cv::Mat &image, const int cellSize, const std::vector<cv::Point2f> &currKeypoints, const cv::Rect &roi)
 {
     if (image.empty())
     {
@@ -211,4 +155,60 @@ std::vector<cv::Point2f> FeatureExtractor::detectSingleScale(const cv::Mat &imag
     }
 
     return detectedPx;
+}
+
+std::vector<cv::Mat> FeatureExtractor::describeFeaturePoints(const cv::Mat &image, const std::vector<cv::Point2f> &points) const
+{
+    if (points.empty())
+    {
+        return std::vector<cv::Mat>();
+    }
+
+    std::vector<cv::KeyPoint> keypoints;
+    size_t numKeypoints = points.size();
+    keypoints.reserve(numKeypoints);
+    std::vector<cv::Mat> descriptors;
+    descriptors.reserve(numKeypoints);
+
+    cv::KeyPoint::convert(points, keypoints);
+
+    cv::Mat descs;
+
+    if (descriptor_ == nullptr)
+    {
+        descriptor_ = cv::ORB::create(500, 1., 0);
+    }
+
+    descriptor_->compute(image, keypoints, descs);
+
+    if (keypoints.empty())
+    {
+        return std::vector<cv::Mat>(numKeypoints, cv::Mat());
+    }
+
+    size_t k = 0;
+
+    for (size_t i = 0; i < numKeypoints; i++)
+    {
+        if (k < keypoints.size())
+        {
+            if (keypoints[k].pt == points[i])
+            {
+                descriptors.push_back(descs.row(k));
+                k++;
+            }
+            else
+            {
+                descriptors.push_back(cv::Mat());
+            }
+        }
+        else
+        {
+            descriptors.push_back(cv::Mat());
+        }
+    }
+
+    assert(descriptors.size() == points.size());
+
+    return descriptors;
 }
