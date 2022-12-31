@@ -46,7 +46,6 @@ private:
     int width;
     int height;
     int frameId_ = -1;
-    double time;
 
     std::shared_ptr<State> state_;
     std::shared_ptr<Frame> currFrame_;
