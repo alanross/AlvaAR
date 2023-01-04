@@ -1,7 +1,8 @@
 import fs from 'fs';
 import https from 'https';
-import ip from 'ip';
 import path from 'path';
+import ip from 'ip';
+import { Server } from 'socket.io';
 
 const PORT = 443;
 const FOLDER = './public/';
@@ -31,7 +32,7 @@ const credentials = {
     cert: fs.readFileSync( 'ssl/cert.pem' )
 };
 
-class Server
+class HttpsServer
 {
     static requestListener( request, response )
     {
@@ -56,7 +57,7 @@ class Server
             if( !mimeType )
             {
                 console.log( "Unknown mime-type. Url: ", request.url );
-                Server.sendUnknownMimeType( response, fileExtension );
+                HttpsServer.sendUnknownMimeType( response, fileExtension );
                 return;
             }
 
@@ -64,11 +65,11 @@ class Server
             {
                 if( error )
                 {
-                    Server.sendFileNotFound( response );
+                    HttpsServer.sendFileNotFound( response );
                     return;
                 }
 
-                Server.sendFile( request, response, filePath, mimeType );
+                HttpsServer.sendFile( request, response, filePath, mimeType );
             } );
         }
     }
@@ -127,9 +128,20 @@ class Server
     }
 }
 
-https.createServer( credentials, Server.requestListener ).listen( PORT, () =>
+const server = https.createServer( credentials, HttpsServer.requestListener ).listen( PORT, () =>
 {
     const url = `https://${ ip.address() }:${ PORT }`;
 
     console.log( `Server running at: \x1b[36m${ url }\x1b[0m` );
+} );
+
+const io = new Server( server );
+io.on( 'connection', ( socket ) =>
+{
+    // motion data : { time, gx, gy, gz, ax, ay, az }
+    // t = time is ms, g = gyroscope; a = acceleration
+    socket.on( 'motionData', ( data ) => io.emit( 'motionData', data ) );
+
+    // orientation data : { time, x, y, z }
+    socket.on( 'orientationData', ( data ) => io.emit( 'orientationData', data ) );
 } );
