@@ -183,7 +183,7 @@
             $container.appendChild( $view );
 
             document.body.appendChild( Stats.el );
-            document.body.addEventListener( "click", () => alva.reset(), false );
+            document.body.addEventListener( "click", () => alva.reset() || view.reset(), false );
 
             onFrame( () =>
             {
