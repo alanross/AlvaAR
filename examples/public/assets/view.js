@@ -22,7 +22,13 @@ class ARCamView
         this.object.position.set( x, y, z );
         this.object.visible = false;
 
-        this.box = new THREE.Mesh( new THREE.BoxGeometry( 100, 100, 100, 4, 4, 4 ), new THREE.MeshBasicMaterial( { color: 0xff00ff, transparent: true, depthTest:true, wireframe: true, opacity: 0.4 } ) );
+        this.box = new THREE.Mesh( new THREE.BoxGeometry( 100, 100, 100, 4, 4, 4 ), new THREE.MeshBasicMaterial( {
+            color: 0xff00ff,
+            transparent: true,
+            depthTest: true,
+            wireframe: true,
+            opacity: 0.4
+        } ) );
         this.box.visible = false;
 
         this.scene = new THREE.Scene();
@@ -79,7 +85,13 @@ class ARIMUView
         this.object.scale.set( scale, scale, scale );
         this.object.position.set( x, y, z );
 
-        this.box = new THREE.Mesh( new THREE.BoxGeometry( 100, 100, 100, 4, 4, 4 ), new THREE.MeshBasicMaterial( { color: 0xff00ff, transparent: true, depthTest:true, wireframe: true, opacity: 0.4 } ) );
+        this.box = new THREE.Mesh( new THREE.BoxGeometry( 100, 100, 100, 4, 4, 4 ), new THREE.MeshBasicMaterial( {
+            color: 0xff00ff,
+            transparent: true,
+            depthTest: true,
+            wireframe: true,
+            opacity: 0.4
+        } ) );
 
         this.scene = new THREE.Scene();
         this.scene.add( new THREE.AmbientLight( 0x808080 ) );
@@ -130,18 +142,32 @@ class ARIMUView
             this.prevQuaternion.copy( this.camera.quaternion );
         }
 
-        this.cameraPositionPrev.copy( this.cameraPositionCurr );
-
         if( pose )
         {
             this.applyPose( pose, null, this.cameraPositionCurr );
-        }
 
-        this.camera.position.set(
-            this.camera.position.x + this.cameraPositionCurr.x - this.cameraPositionPrev.x,
-            this.camera.position.y + this.cameraPositionCurr.y - this.cameraPositionPrev.y,
-            this.camera.position.z + this.cameraPositionCurr.z - this.cameraPositionPrev.z
-        );
+            if( !this.cameraPositionPrev )
+            {
+                this.cameraPositionPrev = new THREE.Vector3( 0, 0, 0 );
+            }
+            else
+            {
+                this.camera.position.x += this.cameraPositionCurr.x - this.cameraPositionPrev.x;
+                this.camera.position.y += this.cameraPositionCurr.y - this.cameraPositionPrev.y;
+                this.camera.position.z += this.cameraPositionCurr.z - this.cameraPositionPrev.z;
+            }
+
+            this.cameraPositionPrev.copy( this.cameraPositionCurr );
+        }
+        else
+        {
+            this.cameraPositionPrev = null;
+        }
+    }
+
+    reset()
+    {
+        this.camera.position.set( 0, 0, 1 );
     }
 }
 
