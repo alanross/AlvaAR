@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no" name="viewport"/>
+    <meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+    <title>AlvaAR IMU/Pose Emitter</title>
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            font-family: 'Helvetica', sans-serif;
+            overflow: hidden;
+            background: #000;
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: block;
+            overflow: hidden;
+            line-height: 0;
+        }
+
+        #container > * {
+            position: absolute;
+            display: block;
+            user-select: none;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            animation: fadeIn 1.2s;
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        #container > video {
+            object-fit: cover;
+            object-position: 50% 50%;
+        }
+
+        #splash {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            opacity: 1;
+        }
+
+        #overlay {
+            position: absolute;
+            font-size: 16px;
+            z-index: 2;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        #overlay button {
+            background: transparent;
+            border: 1px solid rgb(255, 255, 255);
+            border-radius: 4px;
+            color: #ffffff;
+            padding: 12px 18px;
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+
+        #gyr,
+        #acc {
+            width: 100%;
+            height: 100px;
+            background: rgba(0, 0, 0, 0.5);
+            display: block;
+            margin-bottom: 1px;
+        }
+
+        @keyframes fadeIn {
+            0% {
+                opacity: 0;
+            }
+            50% {
+                opacity: 0.6;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+
+        @media screen and (max-device-width: 480px) and (orientation: landscape) {
+            #container {
+                display: none;
+            }
+
+            body::before {
+                content: "Rotate device to portrait mode.";
+                color: white;
+            }
+        }
+
+        @media screen and (max-device-width: 480px) and (orientation: portrait) {
+            #container {
+                display: block;
+            }
+
+            body::before {
+                content: none;
+            }
+        }
+    </style>
+</head>
+<body>
+<div id="container"></div>
+<canvas id="acc"></canvas>
+<canvas id="gyr"></canvas>
+<div id="overlay">
+    <button id="start_button">Start</button>
+    <div id="splash"></div>
+</div>
+<script type="module">
+    import { io } from "https://cdn.socket.io/4.4.1/socket.io.esm.min.js";
+    import { AlvaAR } from './assets/alva_ar.js';
+    import { ARCamView } from "./assets/view.js";
+    import { Camera, onFrame, resize2cover } from "./assets/utils.js";
+
+    class IMU
+    {
+        static Initialize()
+        {
+            return new Promise( ( resolve, reject ) =>
+            {
+                const finalize = () =>
+                {
+                    if( window.isSecureContext === false )
+                    {
+                        reject( 'DeviceOrientation is only available in secure contexts (https).' );
+                        return;
+                    }
+
+                    if( window.DeviceOrientationEvent === undefined )
+                    {
+                        reject( "DeviceOrientation not supported." );
+                        return;
+                    }
+
+                    if( window.DeviceMotionEvent === undefined )
+                    {
+                        reject( "DeviceMotion not supported." );
+                        return;
+                    }
+
+                    resolve( new IMU() );
+                }
+
+                if( window.DeviceMotionEvent !== undefined && typeof window.DeviceMotionEvent.requestPermission === 'function' )
+                {
+                    window.DeviceMotionEvent.requestPermission().then( state =>
+                    {
+                        if( state === "granted" )
+                        {
+                            finalize();
+                        }
+                        else
+                        {
+                            reject( "Permission denied by user." );
+                        }
+                    }, error =>
+                    {
+                        reject( error.toString() );
+                    } );
+                }
+                else if( window.ondevicemotion !== undefined )
+                {
+                    finalize();
+                }
+                else
+                {
+                    reject( "DeviceMotion is not supported." );
+                }
+            } );
+        }
+
+        constructor()
+        {
+            const deg2rad = Math.PI / 180;
+
+            this.orientation = { x: 0, y: 0, z: 0 };
+            this.orientationTime = 0;
+
+            this.motionGyr = { x: 0, y: 0, z: 0 };
+            this.motionAcc = { x: 0, y: 0, z: 0 };
+            this.motionAccG = { x: 0, y: 0, z: 0 };
+            this.motionTime = 0;
+
+            this.onOrientationData = (( time, x, y, z ) =>
+            {
+            });
+
+            this.onMotionData = (( time, gx, gy, gz, ax, ay, az ) =>
+            {
+            });
+
+            const handleDeviceOrientation = ( event ) =>
+            {
+                this.orientation.x = event.beta * deg2rad;    // X-axis (β)
+                this.orientation.y = event.gamma * deg2rad;   // Y-axis (γ)
+                this.orientation.z = event.alpha * deg2rad;   // Z-axis (α)
+
+                this.orientationTime = Date.now();
+
+                this.onOrientationData( this.orientationTime, this.orientation.x, this.orientation.y, this.orientation.z );
+            }
+
+            const handleDeviceMotion = ( event ) =>
+            {
+                this.motionAcc.x = event.acceleration.x; // (m/s^2)
+                this.motionAcc.y = event.acceleration.y; // (m/s^2)
+                this.motionAcc.z = event.acceleration.z; // (m/s^2)
+
+                this.motionAccG.x = event.accelerationIncludingGravity.x; // (m/s^2)
+                this.motionAccG.y = event.accelerationIncludingGravity.y; // (m/s^2)
+                this.motionAccG.z = event.accelerationIncludingGravity.z; // (m/s^2)
+
+                this.motionGyr.x = event.rotationRate.beta * deg2rad;   // X-axis (β) deg to rad: rad/s
+                this.motionGyr.y = event.rotationRate.gamma * deg2rad;  // Y-axis (γ) deg to rad: rad/s
+                this.motionGyr.z = event.rotationRate.alpha * deg2rad;  // Z-axis (α) deg to rad: rad/s
+
+                this.motionTime = Date.now();
+
+                this.onMotionData( this.motionTime, this.motionGyr.x, this.motionGyr.y, this.motionGyr.z, this.motionAcc.x, this.motionAcc.y, this.motionAcc.z );
+            }
+
+            window.addEventListener( 'devicemotion', handleDeviceMotion.bind( this ), false );
+            window.addEventListener( 'deviceorientation', handleDeviceOrientation.bind( this ), false );
+        }
+    }
+
+    function main()
+    {
+        const config = {
+            video: {
+                facingMode: 'environment',
+                aspectRatio: 16 / 9,
+                width: { ideal: 1280 }
+            },
+            audio: false
+        }
+
+        const $container = document.getElementById( 'container' );
+        const $view = document.createElement( 'div' );
+        const $canvas = document.createElement( 'canvas' );
+        const $overlay = document.getElementById( 'overlay' );
+        const $start = document.getElementById( 'start_button' );
+        const $splash = document.getElementById( 'splash' );
+        const ctxAcc = document.getElementById( "acc" ).getContext( "2d" );
+        const ctxGyr = document.getElementById( "gyr" ).getContext( "2d" );
+        const splashFadeTime = 800;
+
+        $splash.style.transition = `opacity ${ splashFadeTime / 1000 }s ease`;
+        $splash.style.opacity = 0;
+
+        async function demo( media, sensor )
+        {
+            const $video = media.el;
+
+            const size = resize2cover( $video.videoWidth, $video.videoHeight, $container.clientWidth, $container.clientHeight );
+
+            $canvas.width = $container.clientWidth;
+            $canvas.height = $container.clientHeight;
+            $video.style.width = size.width + 'px';
+            $video.style.height = size.height + 'px';
+
+            const ctx = $canvas.getContext( '2d', { alpha: false, desynchronized: true } );
+            const alva = await AlvaAR.Initialize( $canvas.width, $canvas.height );
+            const view = new ARCamView( $view, $canvas.width, $canvas.height );
+
+            $container.appendChild( $canvas );
+            $container.appendChild( $view );
+
+            document.body.addEventListener( "click", () => alva.reset(), false );
+
+            let _graphLinePos = 0;
+
+            const socket = io();
+
+            const emitPoseData = ( time, qx, qy, qz, qw, tx, ty, tz ) =>
+            {
+                socket.emit( 'data', { type: 'vo', time, qx, qy, qz, qw, tx, ty, tz } );
+            }
+
+            const emitMotionData = ( time, gx, gy, gz, ax, ay, az ) =>
+            {
+                socket.emit( 'data', { type: 'motion', time, gx, gy, gz, ax, ay, az } );
+
+                renderGraph( ctxAcc, ax, ay, az, _graphLinePos, 3, "bar" );
+                renderGraph( ctxGyr, gx, gy, gz, _graphLinePos, 3, "dot" );
+                _graphLinePos++;
+            }
+
+            const emitOrientationData = ( time, x, y, z ) =>
+            {
+                socket.emit( 'data', { type: 'orientation', time, x, y, z } );
+            }
+
+            sensor.onOrientationData = emitOrientationData;
+            sensor.onMotionData = emitMotionData;
+
+            function renderGraph( ctx, x, y, z, pos, scale = 1, type = "bar" )
+            {
+                const canvasW = parseInt( ctx.canvas.style.width, 10 );
+                const canvasH = parseInt( ctx.canvas.style.height, 10 );
+
+                const bandH = canvasH / 3;
+                const bandH2 = bandH / 2;
+
+                pos = pos % canvasW;
+
+                x = Math.round( Math.max( -bandH2, Math.min( x * scale, bandH2 ) ) );
+                y = Math.round( Math.max( -bandH2, Math.min( y * scale, bandH2 ) ) );
+                z = Math.round( Math.max( -bandH2, Math.min( z * scale, bandH2 ) ) );
+
+                ctx.fillStyle = "#fff";
+                ctx.fillRect( pos, 0, 2, canvasH );
+                ctx.clearRect( pos, 0, 1, canvasH );
+
+                if( type === "bar" )
+                {
+                    ctx.fillStyle = "red";
+                    (x >= 0) ? ctx.fillRect( pos, bandH * 0 + bandH2, 1, x + 1 ) : ctx.fillRect( pos, bandH * 0 + bandH2 + x, 1, -x + 1 );
+
+                    ctx.fillStyle = "lime";
+                    (y >= 0) ? ctx.fillRect( pos, bandH * 1 + bandH2, 1, y + 1 ) : ctx.fillRect( pos, bandH * 1 + bandH2 + y, 1, -y + 1 );
+
+                    ctx.fillStyle = "aqua";
+                    (z >= 0) ? ctx.fillRect( pos, bandH * 2 + bandH2, 1, z + 1 ) : ctx.fillRect( pos, bandH * 2 + bandH2 + z, 1, -z + 1 );
+                }
+                if( type === "dot" )
+                {
+                    ctx.fillStyle = "red";
+                    ctx.fillRect( pos, bandH * 0 + bandH2 + x, 1, 1 );
+
+                    ctx.fillStyle = "lime";
+                    ctx.fillRect( pos, bandH * 1 + bandH2 + y, 1, 1 );
+
+                    ctx.fillStyle = "aqua";
+                    ctx.fillRect( pos, bandH * 2 + bandH2 + z, 1, 1 );
+                }
+            }
+
+            function resizeCanvas()
+            {
+                const f = ( ctx ) =>
+                {
+                    ctx.canvas.width = window.innerWidth || document.body.offsetWidth;
+                    ctx.canvas.height = 100;
+
+                    if( window.devicePixelRatio > 1 )
+                    {
+                        const w = ctx.canvas.width;
+                        const h = ctx.canvas.height;
+
+                        ctx.canvas.width = w * window.devicePixelRatio;
+                        ctx.canvas.height = h * window.devicePixelRatio;
+                        ctx.canvas.style.width = w + "px";
+                        ctx.canvas.style.height = h + "px";
+
+                        ctx.scale( window.devicePixelRatio, window.devicePixelRatio );
+                    }
+                }
+
+                f( ctxAcc );
+                f( ctxGyr );
+            }
+
+            resizeCanvas();
+
+            onFrame( () =>
+            {
+                ctx.clearRect( 0, 0, $canvas.width, $canvas.height );
+
+                if( !document['hidden'] )
+                {
+                    ctx.drawImage( $video, 0, 0, $video.videoWidth, $video.videoHeight, size.x, size.y, size.width, size.height );
+                    const frame = ctx.getImageData( 0, 0, $canvas.width, $canvas.height );
+
+                    const pose = alva.findCameraPose( frame );
+
+                    if( pose )
+                    {
+                        view.updateCameraPose( pose );
+
+                        const q = view.camera.quaternion;
+                        const t = view.camera.position;
+
+                        emitPoseData( Date.now(), q.x, q.y, q.z, q.w, t.x, t.y, t.z );
+                    }
+                    else
+                    {
+                        view.lostCamera();
+
+                        const dots = alva.getFramePoints();
+
+                        for( const p of dots )
+                        {
+                            ctx.fillStyle = 'white';
+                            ctx.fillRect( p.x, p.y, 2, 2 );
+                        }
+                    }
+                }
+
+                return true;
+            }, 30 );
+        }
+
+        setTimeout( () =>
+        {
+            $splash.remove();
+
+            $start.addEventListener( 'click', async () =>
+            {
+                try
+                {
+                    $overlay.remove();
+
+                    const sensor = await IMU.Initialize();
+                    const media = await Camera.Initialize( config );
+
+                    await demo( media, sensor );
+                } catch( error )
+                {
+                    alert( 'Error: ' + error );
+                }
+            }, { once: true } );
+
+        }, splashFadeTime );
+    }
+
+    window.addEventListener( 'load', main );
+</script>
+</body>
+</html>
