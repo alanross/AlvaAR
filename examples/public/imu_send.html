@@ -237,12 +237,12 @@
 
         function emitMotionData( time, gx, gy, gz, ax, ay, az )
         {
-            socket.emit( 'motionData', { time, gx, gy, gz, ax, ay, az } );
+            socket.emit( 'data', { type: 'motion', time, gx, gy, gz, ax, ay, az } );
         }
 
         function emitOrientationData( time, x, y, z )
         {
-            socket.emit( 'orientationData', { time, x, y, z } );
+            socket.emit( 'data', { type: 'orientation', time, x, y, z } );
         }
 
         function onDeviceMotion( event )
