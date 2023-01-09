@@ -150,41 +150,48 @@
         }
     }
 
-    class SimpleFilter
+    class Filters
     {
-        constructor( windowSize = 10 )
+        static LPF( slidingWindowSize = 10 )
         {
-            this.values = [];
-            this.windowSize = windowSize;
-            if( this.windowSize < 2 ) throw new Error( "Window size must be larger than 2" );
+            if( slidingWindowSize < 2 ) throw new Error( "Window size must be larger than 2" );
+
+            return (() =>
+            {
+                const values = [];
+
+                return ( value, amount = 0.5 ) =>
+                {
+                    values.push( value );
+
+                    if( values.length > slidingWindowSize ) values.shift();
+
+                    const average = values.reduce( ( a, b ) => a + b ) / values.length;
+
+                    return amount * value + (1 - amount) * average;
+                };
+            })();
         }
 
-        hp( value, amount = 0.5 )
+        static HPF( slidingWindowSize = 10 )
         {
-            this.values.push( value );
+            if( slidingWindowSize < 2 ) throw new Error( "Window size must be larger than 2" );
 
-            if( this.values.length > this.windowSize )
+            return (() =>
             {
-                this.values.shift();
-            }
+                const values = [];
 
-            const average = this.values.reduce( ( a, b ) => a + b ) / this.values.length;
+                return ( value, amount = 0.5 ) =>
+                {
+                    values.push( value );
 
-            return amount * (value - average) + average;
-        }
+                    if( values.length > slidingWindowSize ) values.shift();
 
-        lp( value, amount = 0.5 )
-        {
-            this.values.push( value );
+                    const average = values.reduce( ( a, b ) => a + b ) / values.length;
 
-            if( this.values.length > this.windowSize )
-            {
-                this.values.shift();
-            }
-
-            const average = this.values.reduce( ( a, b ) => a + b ) / this.values.length;
-
-            return amount * value + (1 - amount) * average;
+                    return amount * (value - average) + average;
+                };
+            })();
         }
     }
 
@@ -247,8 +254,8 @@
             accHP: 0.5,
             accLP: 0.5,
             accBlend: 0.3,
-            magFilterHP: new SimpleFilter( 10 ),
-            magFilterLP: new SimpleFilter( 10 ),
+            magFilterHP: Filters.HPF( 10 ),
+            magFilterLP: Filters.LPF( 10 ),
             reset: () =>
             {
                 acc.set( 0, 0, 0 );
@@ -303,8 +310,8 @@
             objMotion.quaternion.copy( new THREE.Quaternion( ahrs.q0, ahrs.q1, -ahrs.q2, -ahrs.q3 ) );
 
             const accMagnitude = Math.sqrt( data.ax * data.ax + data.ay * data.ay + data.az * data.az );
-            const accMagnitudeHp = options.magFilterHP.hp( accMagnitude, options.accHP );
-            const accMagnitudeLp = options.magFilterLP.lp( Math.abs( accMagnitudeHp ), options.accLP );
+            const accMagnitudeHp = options.magFilterHP( accMagnitude, options.accHP );
+            const accMagnitudeLp = options.magFilterLP( Math.abs( accMagnitudeHp ), options.accLP );
             const isStationary = accMagnitudeLp < 0.1;
 
             const round = ( val ) => Math.round( (val + Number.EPSILON) * 100 ) / 100;
