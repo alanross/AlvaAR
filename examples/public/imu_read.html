@@ -214,13 +214,17 @@
         controls.maxDistance = 1000;
 
         const objOrient = new THREE.Mesh( new THREE.BoxGeometry( 1, 0.2, 2, 1, 1, 1 ), new THREE.MeshNormalMaterial() );
-        objOrient.position.set( -3, 0, -5 );
+        objOrient.position.set( -4, 0, -5 );
         objOrient.add( new THREE.AxesHelper( 2 ) );
 
         const objMotion = new THREE.Mesh( new THREE.BoxGeometry( 1, 0.2, 2, 1, 1, 1 ), new THREE.MeshNormalMaterial() );
-        objMotion.position.set( 3, 0, -5 );
+        objMotion.position.set( 4, 0, -5 );
         objMotion.add( new THREE.AxesHelper( 2 ) );
         objMotion.rotation.reorder( 'YXZ' );
+
+        const objPose = new THREE.Mesh( new THREE.BoxGeometry( 1, 0.2, 2, 1, 1, 1 ), new THREE.MeshNormalMaterial() );
+        objPose.position.set( 0, 0, -5 );
+        objPose.add( new THREE.AxesHelper( 2 ) );
 
         const box = new THREE.Mesh( new THREE.BoxGeometry( 100, 100, 100, 10, 10, 10 ), new THREE.MeshBasicMaterial( {
             color: 0xff00ff,
@@ -237,6 +241,7 @@
         scene.add( box );
         scene.add( objOrient );
         scene.add( objMotion );
+        scene.add( objPose );
 
         container.appendChild( renderer.domElement );
 
@@ -319,17 +324,17 @@
 
             const timeStep = 0.1;
             const alpha = options.accBlend;
-            acc.x = alpha * acc.x + (1.0 - alpha) * data.ax;
-            acc.y = alpha * acc.y + (1.0 - alpha) * data.ay;
-            acc.z = alpha * acc.z + (1.0 - alpha) * data.az;
+            acc.x = alpha * acc.x + (1.0 - alpha) * round( data.ax );
+            acc.y = alpha * acc.y + (1.0 - alpha) * round( data.ay );
+            acc.z = alpha * acc.z + (1.0 - alpha) * round( data.az );
 
-            vel.x = vel.x + round( acc.x * timeStep );
-            vel.y = vel.y + round( acc.y * timeStep );
-            vel.z = vel.z + round( acc.z * timeStep );
+            vel.x = vel.x + acc.x * timeStep;
+            vel.y = vel.y + acc.y * timeStep;
+            vel.z = vel.z + acc.z * timeStep;
 
-            pos.x = pos.x + round( vel.x * timeStep );
-            pos.y = pos.y + round( vel.y * timeStep );
-            pos.z = pos.z + round( vel.z * timeStep );
+            pos.x = pos.x + vel.x * timeStep;
+            pos.y = pos.y + vel.y * timeStep;
+            pos.z = pos.z + vel.z * timeStep;
 
             objMotion.position.x = pos.x;
             objMotion.position.y = pos.y;
@@ -348,7 +353,8 @@
 
         function onVOData( data )
         {
-
+            objPose.quaternion.copy( new THREE.Quaternion( data.qx, data.qy, -data.qz, -data.qw ) );
+            objPose.position.set( data.tx, data.ty, data.tz );
         }
 
         function renderGraph( ctx, x, y, z, pos, scale = 1, type = "bar" )
