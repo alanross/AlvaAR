@@ -138,10 +138,5 @@ const server = https.createServer( credentials, HttpsServer.requestListener ).li
 const io = new Server( server );
 io.on( 'connection', ( socket ) =>
 {
-    // motion data : { time, gx, gy, gz, ax, ay, az }
-    // t = time is ms, g = gyroscope; a = acceleration
-    socket.on( 'motionData', ( data ) => io.emit( 'motionData', data ) );
-
-    // orientation data : { time, x, y, z }
-    socket.on( 'orientationData', ( data ) => io.emit( 'orientationData', data ) );
+    socket.on( 'data', ( data ) => io.emit( 'data', data ) );
 } );
