@@ -35,7 +35,6 @@
             display: block;
             margin-bottom: 1px;
         }
-
     </style>
 </head>
 <body>
@@ -47,11 +46,13 @@
     import * as THREE from 'https://threejsfundamentals.org/threejs/resources/threejs/r132/build/three.module.js';
     import { OrbitControls } from 'https://threejsfundamentals.org/threejs/resources/threejs/r132/examples/jsm/controls/OrbitControls.js';
     import { io } from "https://cdn.socket.io/4.4.1/socket.io.esm.min.js";
+    import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.17/+esm';
 
     class MadgwickAHRS
     {
         // Madgwick's IMU algorithm: http://www.x-io.co.uk/node/8#open_source_ahrs_and_imu_algorithms
-        constructor( sampleFreq = 60 /*Motion data is sample with 60Hz on iOS Safari */ )
+        // Motion data is sampled with 60Hz on iOS Safari
+        constructor( sampleFreq = 60, beta = 0.01 )
         {
             // quaternion of sensor frame relative to auxiliary frame
             this.q0 = 1.0;
@@ -63,8 +64,10 @@
             this.sampleFreq = sampleFreq;
             this.sampleTime = 0;
 
+            // Rule of thumb: increasing beta leads to faster bias corrections,
+            // higher sensitiveness to lateral accelerations.
             // 2 * proportional gain (Kp)
-            this.beta = 0.01;
+            this.beta = beta;
         }
 
         update( time, gx, gy, gz, ax, ay, az )
@@ -147,18 +150,18 @@
         }
     }
 
-    class MotionFilter
+    class SimpleFilter
     {
-        constructor( windowSize = 60 )
+        constructor( windowSize = 10 )
         {
             this.values = [];
             this.windowSize = windowSize;
-            if( this.windowSize < 2 ) throw new Error( "Window Size must be larger than 2" );
+            if( this.windowSize < 2 ) throw new Error( "Window size must be larger than 2" );
         }
 
-        hi( input, amountHighPass = 0.5 )
+        hp( value, amount = 0.5 )
         {
-            this.values.push( input );
+            this.values.push( value );
 
             if( this.values.length > this.windowSize )
             {
@@ -167,12 +170,12 @@
 
             const average = this.values.reduce( ( a, b ) => a + b ) / this.values.length;
 
-            return amountHighPass * (input - average) + average;
+            return amount * (value - average) + average;
         }
 
-        lo( input, amountLowPass = 0.5 )
+        lp( value, amount = 0.5 )
         {
-            this.values.push( input );
+            this.values.push( value );
 
             if( this.values.length > this.windowSize )
             {
@@ -181,12 +184,13 @@
 
             const average = this.values.reduce( ( a, b ) => a + b ) / this.values.length;
 
-            return amountLowPass * input + (1 - amountLowPass) * average;
+            return amount * value + (1 - amount) * average;
         }
     }
 
     async function main()
     {
+        const container = document.getElementById( 'three' );
         const ctxAcc = document.getElementById( "acc" ).getContext( "2d" );
         const ctxGyr = document.getElementById( "gyr" ).getContext( "2d" );
 
@@ -194,7 +198,7 @@
         renderer.setClearColor( 0, 0 );
 
         const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
-        camera.position.set( 0, 0, 5 );
+        camera.position.set( 0, 3, 10 );
 
         const controls = new OrbitControls( camera, renderer.domElement );
         controls.enableDamping = true;
@@ -202,13 +206,14 @@
         controls.minDistance = 0.1;
         controls.maxDistance = 1000;
 
-        const objectOri = new THREE.Mesh( new THREE.BoxGeometry( 1, 1, 1, 1, 1, 1 ), new THREE.MeshNormalMaterial( { flatShading: true } ) );
-        objectOri.position.set( -3, 0, -5 );
-        objectOri.add( new THREE.AxesHelper( 2 ) );
+        const objOrient = new THREE.Mesh( new THREE.BoxGeometry( 1, 0.2, 2, 1, 1, 1 ), new THREE.MeshNormalMaterial() );
+        objOrient.position.set( -3, 0, -5 );
+        objOrient.add( new THREE.AxesHelper( 2 ) );
 
-        const objectMot = new THREE.Mesh( new THREE.BoxGeometry( 1, 1, 1, 1, 1, 1 ), new THREE.MeshNormalMaterial( { flatShading: true } ) );
-        objectMot.position.set( 3, 0, -5 );
-        objectMot.add( new THREE.AxesHelper( 2 ) );
+        const objMotion = new THREE.Mesh( new THREE.BoxGeometry( 1, 0.2, 2, 1, 1, 1 ), new THREE.MeshNormalMaterial() );
+        objMotion.position.set( 3, 0, -5 );
+        objMotion.add( new THREE.AxesHelper( 2 ) );
+        objMotion.rotation.reorder( 'YXZ' );
 
         const box = new THREE.Mesh( new THREE.BoxGeometry( 100, 100, 100, 10, 10, 10 ), new THREE.MeshBasicMaterial( {
             color: 0xff00ff,
@@ -223,16 +228,10 @@
         scene.add( new THREE.HemisphereLight( 0x404040, 0xf0f0f0, 1 ) );
         scene.add( camera );
         scene.add( box );
-        scene.add( objectOri );
-        scene.add( objectMot );
+        scene.add( objOrient );
+        scene.add( objMotion );
 
-        document.getElementById( 'three' ).appendChild( renderer.domElement );
-        document.getElementById( 'three' ).addEventListener( "click", () =>
-        {
-            acc.set( 0, 0, 0 );
-            vel.set( 0, 0, 0 );
-            pos.set( 0, 0, 0 );
-        } );
+        container.appendChild( renderer.domElement );
 
         let _graphPos = 0;
 
@@ -240,59 +239,109 @@
         const vel = new THREE.Vector3( 0, 0, 0 );
         const pos = new THREE.Vector3( 0, 0, 0 );
 
-        acc.fx = new MotionFilter();
-        acc.fy = new MotionFilter();
-        acc.fz = new MotionFilter();
-
-        vel.fx = new MotionFilter();
-        vel.fy = new MotionFilter();
-        vel.fz = new MotionFilter();
-
-        pos.fx = new MotionFilter();
-        pos.fy = new MotionFilter();
-        pos.fz = new MotionFilter();
+        const options = {
+            gyr: "-",
+            acc: "-",
+            vel: "-",
+            stationary: 'false',
+            accHP: 0.5,
+            accLP: 0.5,
+            accBlend: 0.3,
+            magFilterHP: new SimpleFilter( 10 ),
+            magFilterLP: new SimpleFilter( 10 ),
+            reset: () =>
+            {
+                acc.set( 0, 0, 0 );
+                vel.set( 0, 0, 0 );
+                pos.set( 0, 0, 0 );
+            }
+        };
 
         const ahrs = new MadgwickAHRS();
-        const socket = io();
-        socket.on( 'orientationData', onOrientationData );
-        socket.on( 'motionData', onMotionData );
 
-        function onOrientationData( sample )
+        io().on( 'data', ( data ) =>
         {
-            objectOri.quaternion.setFromEuler( new THREE.Euler( sample.x, sample.z, -sample.y, "XYZ" ) );
+            if( data.type === 'motion' )
+            {
+                // data format: { time, x, y, z }
+                onMotionData( data );
+            }
+            else if( data.type === 'orientation' )
+            {
+                // data format: { time, gx, gy, gz, ax, ay, az }; g = gyroscope; a = acceleration
+                onOrientationData( data );
+            }
+            else if( data.type === 'vo' )
+            {
+                // data format: { time, qx, qy, qz, qw, tx, ty, tz }
+                onVOData( data );
+            }
+        } );
+
+        const gui = new GUI();
+        gui.add( options, 'accHP', 0.0, 1.0, 0.01 );
+        gui.add( options, 'accLP', 0.0, 1.0, 0.01 );
+        gui.add( options, 'accBlend', 0.0, 1.0, 0.01 );
+        gui.add( options, 'gyr' ).listen().disable();
+        gui.add( options, 'acc' ).listen().disable();
+        gui.add( options, 'vel' ).listen().disable();
+        gui.add( options, 'stationary' ).listen().disable();
+        gui.add( options, 'reset' );
+
+        function onOrientationData( data )
+        {
+            objOrient.quaternion.setFromEuler( new THREE.Euler( data.x, data.z, -data.y, 'YXZ' ) );
         }
 
-        function onMotionData( sample )
+        function onMotionData( data )
         {
-            ahrs.update( sample.time, sample.gx, sample.gy, sample.gz, sample.ax, sample.ay, sample.az );
-            objectMot.quaternion.copy( new THREE.Quaternion( ahrs.q0, ahrs.q1, ahrs.q2, ahrs.q3 ) );
-
             // Integrate the acceleration to compute the velocity and position
             // velocity = velocity + acceleration * timeStep
             // position = position + velocity * timeStep
 
-            const blend = 0.2;
-            acc.x = blend * acc.x + (1 - blend) * sample.ax;
-            acc.y = blend * acc.y + (1 - blend) * sample.ay;
-            acc.z = blend * acc.z + (1 - blend) * sample.az;
+            ahrs.update( data.time, data.gx, data.gy, data.gz, data.ax, data.ay, data.az );
+            objMotion.quaternion.copy( new THREE.Quaternion( ahrs.q0, ahrs.q1, -ahrs.q2, -ahrs.q3 ) );
+
+            const accMagnitude = Math.sqrt( data.ax * data.ax + data.ay * data.ay + data.az * data.az );
+            const accMagnitudeHp = options.magFilterHP.hp( accMagnitude, options.accHP );
+            const accMagnitudeLp = options.magFilterLP.lp( Math.abs( accMagnitudeHp ), options.accLP );
+            const isStationary = accMagnitudeLp < 0.1;
+
+            const round = ( val ) => Math.round( (val + Number.EPSILON) * 100 ) / 100;
+            const fixed = ( val ) => val.toFixed( 3 );
 
             const timeStep = 0.1;
-            vel.x = vel.x + acc.x * timeStep;
-            vel.y = vel.y + acc.y * timeStep;
-            vel.z = vel.z + acc.z * timeStep;
+            const alpha = options.accBlend;
+            acc.x = alpha * acc.x + (1.0 - alpha) * data.ax;
+            acc.y = alpha * acc.y + (1.0 - alpha) * data.ay;
+            acc.z = alpha * acc.z + (1.0 - alpha) * data.az;
 
-            pos.x = pos.x + vel.x * timeStep;
-            pos.y = pos.y + vel.y * timeStep;
-            pos.z = pos.z + vel.z * timeStep;
+            vel.x = vel.x + round( acc.x * timeStep );
+            vel.y = vel.y + round( acc.y * timeStep );
+            vel.z = vel.z + round( acc.z * timeStep );
 
-            objectMot.position.x = pos.x;
-            objectMot.position.y = pos.y;
-            objectMot.position.z = pos.z - 10;
+            pos.x = pos.x + round( vel.x * timeStep );
+            pos.y = pos.y + round( vel.y * timeStep );
+            pos.z = pos.z + round( vel.z * timeStep );
 
-            renderGraph( ctxAcc, sample.ax, sample.ay, sample.az, _graphPos, 3, "bar" );
-            renderGraph( ctxGyr, sample.gx, sample.gy, sample.gz, _graphPos, 3, "dot" );
+            objMotion.position.x = pos.x;
+            objMotion.position.y = pos.y;
+            objMotion.position.z = pos.z - 10;
+
+            renderGraph( ctxAcc, data.ax, data.ay, data.az, _graphPos, 3, "bar" );
+            renderGraph( ctxGyr, data.gx, data.gy, data.gz, _graphPos, 3, "dot" );
+
+            options.stationary = isStationary ? 'stationary' : 'moving';
+            options.acc = `${ round( data.ax ) } ${ round( data.ay ) } ${ round( data.az ) }`;
+            options.gyr = `${ round( data.gx ) } ${ round( data.gy ) } ${ round( data.gz ) }`;
+            options.vel = `${ round( vel.x ) } ${ round( vel.y ) } ${ round( vel.z ) }`;
 
             _graphPos++;
+        }
+
+        function onVOData( data )
+        {
+
         }
 
         function renderGraph( ctx, x, y, z, pos, scale = 1, type = "bar" )
@@ -337,9 +386,9 @@
             }
         }
 
-        function render()
+        function renderThree()
         {
-            requestAnimationFrame( render );
+            requestAnimationFrame( renderThree );
             controls.update();
             renderer.render( scene, camera );
         }
@@ -378,7 +427,7 @@
         window.addEventListener( "resize", onWindowResize );
 
         onWindowResize();
-        render();
+        renderThree();
     }
 
     window.addEventListener( 'load', main );
