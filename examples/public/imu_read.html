@@ -213,21 +213,21 @@
         controls.minDistance = 0.1;
         controls.maxDistance = 1000;
 
-        const objOrient = new THREE.Mesh( new THREE.BoxGeometry( 1, 0.2, 2, 1, 1, 1 ), new THREE.MeshNormalMaterial() );
-        objOrient.position.set( -4, 0, -5 );
-        objOrient.add( new THREE.AxesHelper( 2 ) );
+        const objA = new THREE.Mesh( new THREE.BoxGeometry( 1, 0.2, 2, 1, 1, 1 ), new THREE.MeshBasicMaterial( { color: 0xca6507 } ) );
+        objA.position.set( -4, 0, -5 );
+        objA.add( new THREE.AxesHelper( 2 ) );
 
-        const objMotion = new THREE.Mesh( new THREE.BoxGeometry( 1, 0.2, 2, 1, 1, 1 ), new THREE.MeshNormalMaterial() );
-        objMotion.position.set( 4, 0, -5 );
-        objMotion.add( new THREE.AxesHelper( 2 ) );
-        objMotion.rotation.reorder( 'YXZ' );
+        const objB = new THREE.Mesh( new THREE.BoxGeometry( 1, 0.2, 2, 1, 1, 1 ), new THREE.MeshBasicMaterial( { color: 0x86ca07 } ) );
+        objB.position.set( 0, 0, -5 );
+        objB.add( new THREE.AxesHelper( 2 ) );
+        objB.rotation.reorder( 'YXZ' );
 
-        const objPose = new THREE.Mesh( new THREE.BoxGeometry( 1, 0.2, 2, 1, 1, 1 ), new THREE.MeshNormalMaterial() );
-        objPose.position.set( 0, 0, -5 );
-        objPose.add( new THREE.AxesHelper( 2 ) );
+        const objC = new THREE.Mesh( new THREE.BoxGeometry( 1, 0.2, 2, 1, 1, 1 ), new THREE.MeshBasicMaterial( { color: 0x049ef4 } ) );
+        objC.position.set( 4, 0, -5 );
+        objC.add( new THREE.AxesHelper( 2 ) );
 
         const box = new THREE.Mesh( new THREE.BoxGeometry( 100, 100, 100, 10, 10, 10 ), new THREE.MeshBasicMaterial( {
-            color: 0xff00ff,
+            color: 0x777777,
             transparent: true,
             depthTest: true,
             wireframe: true,
@@ -239,9 +239,9 @@
         scene.add( new THREE.HemisphereLight( 0x404040, 0xf0f0f0, 1 ) );
         scene.add( camera );
         scene.add( box );
-        scene.add( objOrient );
-        scene.add( objMotion );
-        scene.add( objPose );
+        scene.add( objA );
+        scene.add( objB );
+        scene.add( objC );
 
         container.appendChild( renderer.domElement );
 
@@ -255,7 +255,7 @@
             gyr: "-",
             acc: "-",
             vel: "-",
-            stationary: 'false',
+            stationary: '-',
             accHP: 0.5,
             accLP: 0.5,
             accBlend: 0.3,
@@ -291,18 +291,18 @@
         } );
 
         const gui = new GUI();
+        gui.add( options, 'accBlend', 0.0, 1.0, 0.01 );
         gui.add( options, 'accHP', 0.0, 1.0, 0.01 );
         gui.add( options, 'accLP', 0.0, 1.0, 0.01 );
-        gui.add( options, 'accBlend', 0.0, 1.0, 0.01 );
+        gui.add( options, 'stationary' ).listen().disable();
         gui.add( options, 'gyr' ).listen().disable();
         gui.add( options, 'acc' ).listen().disable();
         gui.add( options, 'vel' ).listen().disable();
-        gui.add( options, 'stationary' ).listen().disable();
         gui.add( options, 'reset' );
 
         function onOrientationData( data )
         {
-            objOrient.quaternion.setFromEuler( new THREE.Euler( data.x, data.z, -data.y, 'YXZ' ) );
+            objA.quaternion.setFromEuler( new THREE.Euler( data.x, data.z, -data.y, 'YXZ' ) );
         }
 
         function onMotionData( data )
@@ -311,8 +311,12 @@
             // velocity = velocity + acceleration * timeStep
             // position = position + velocity * timeStep
 
+            const Q_X_AXIS = new THREE.Quaternion();
+            Q_X_AXIS.setFromAxisAngle( new THREE.Vector3( 1, 0, 0 ), -Math.PI / 2 );
+
             ahrs.update( data.time, data.gx, data.gy, data.gz, data.ax, data.ay, data.az );
-            objMotion.quaternion.copy( new THREE.Quaternion( ahrs.q0, ahrs.q1, -ahrs.q2, -ahrs.q3 ) );
+            objB.quaternion.copy( Q_X_AXIS );
+            objB.quaternion.multiply( new THREE.Quaternion( -ahrs.q0, -ahrs.q1, -ahrs.q2, ahrs.q3 ) );
 
             const accMagnitude = Math.sqrt( data.ax * data.ax + data.ay * data.ay + data.az * data.az );
             const accMagnitudeHp = options.magFilterHP( accMagnitude, options.accHP );
@@ -325,8 +329,8 @@
             const timeStep = 0.1;
             const alpha = options.accBlend;
             acc.x = alpha * acc.x + (1.0 - alpha) * round( data.ax );
-            acc.y = alpha * acc.y + (1.0 - alpha) * round( data.ay );
-            acc.z = alpha * acc.z + (1.0 - alpha) * round( data.az );
+            acc.y = alpha * acc.y + (1.0 - alpha) * round( -data.ay );
+            acc.z = alpha * acc.z + (1.0 - alpha) * round( -data.az );
 
             vel.x = vel.x + acc.x * timeStep;
             vel.y = vel.y + acc.y * timeStep;
@@ -336,9 +340,9 @@
             pos.y = pos.y + vel.y * timeStep;
             pos.z = pos.z + vel.z * timeStep;
 
-            objMotion.position.x = pos.x;
-            objMotion.position.y = pos.y;
-            objMotion.position.z = pos.z - 10;
+            objB.position.x = pos.x;
+            objB.position.y = pos.y;
+            objB.position.z = pos.z - 10;
 
             renderGraph( ctxAcc, data.ax, data.ay, data.az, _graphPos, 3, "bar" );
             renderGraph( ctxGyr, data.gx, data.gy, data.gz, _graphPos, 3, "dot" );
@@ -353,8 +357,13 @@
 
         function onVOData( data )
         {
-            objPose.quaternion.copy( new THREE.Quaternion( data.qx, data.qy, -data.qz, -data.qw ) );
-            objPose.position.set( data.tx, data.ty, data.tz );
+            const Q_X_AXIS = new THREE.Quaternion();
+            Q_X_AXIS.setFromAxisAngle( new THREE.Vector3( 1, 0, 0 ), Math.PI / 2 );
+
+            objC.quaternion.copy( new THREE.Quaternion( data.qx, data.qy, data.qz, data.qw ) );
+            objC.quaternion.multiply( Q_X_AXIS );
+
+            objC.position.set( data.tx, data.ty, data.tz );
         }
 
         function renderGraph( ctx, x, y, z, pos, scale = 1, type = "bar" )
