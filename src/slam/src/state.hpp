@@ -22,7 +22,7 @@ class State
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    State(double imgWidth, double imgHeight);
+    State(double imgWidth, double imgHeight, int frameMaxNumKeypoints);
 
     void reset();
 

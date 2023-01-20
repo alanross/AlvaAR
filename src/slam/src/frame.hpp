@@ -45,22 +45,16 @@ public:
 
     Frame(const Frame &frame);
 
-    // Set the image imgTimestamp and id
-    void updateFrame(const int id, const double timestamp);
-
-    // Return vector of keypoint objects
     std::vector<Keypoint> getKeypoints() const;
 
-    // Return vector of 2D keypoint objects
     std::vector<Keypoint> getKeypoints2d() const;
 
-    // Return vector of 3D keypoint objects
     std::vector<Keypoint> getKeypoints3d() const;
 
-    // Return vector of keypoints' raw pixel positions
+    // Return vector of keypoints raw pixel positions
     std::vector<cv::Point2f> getKeypointsPx() const;
 
-    // Return vector of keypoints' undistorted pixel positions
+    // Return vector of keypoints undistorted pixel positions
     std::vector<cv::Point2f> getKeypointsUnPx() const;
 
     Keypoint getKeypointById(const int keypointId) const;

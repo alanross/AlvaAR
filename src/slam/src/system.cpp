@@ -4,8 +4,6 @@
 
 System::System()
 {
-    width_ = 0;
-    height_ = 0;
 }
 
 System::~System()
@@ -14,10 +12,19 @@ System::~System()
 
 void System::configure(int imageWidth, int imageHeight, double fx, double fy, double cx, double cy, double k1, double k2, double p1, double p2)
 {
-    width_ = imageWidth;
-    height_ = imageHeight;
+    state_ = std::make_shared<State>(imageWidth, imageHeight, 40 );
+    state_->claheEnabled_ = false;
+    state_->mapKeyframeFilteringRatio_ = 0.95;
+    state_->p3pEnabled_ = true;
 
-    state_ = std::make_shared<State>(imageWidth, imageHeight);
+    std::cout << "- [System]: Configure";
+    std::cout << ": width: " << state_->imgWidth_;
+    std::cout << ", height: " << state_->imgHeight_;
+    std::cout << ", Frame Max Cell Size: " << state_->frameMaxCellSize_;
+    std::cout << ", CLAHE Enabled: " << state_->claheEnabled_;
+    std::cout << ", Map Keyframe Filtering Ratio: " << state_->mapKeyframeFilteringRatio_;
+    std::cout << ", P3P Enabled: " << state_->p3pEnabled_ << std::endl;
+
     cameraCalibration_ = std::make_shared<CameraCalibration>(fx, fy, cx, cy, k1, k2, p1, p2, imageWidth, imageHeight, 20);
 
     currFrame_ = std::make_shared<Frame>(cameraCalibration_, state_->frameMaxCellSize_);
@@ -26,7 +33,7 @@ void System::configure(int imageWidth, int imageHeight, double fx, double fy, do
     featureTracker_ = std::make_shared<FeatureTracker>(state_->trackerMaxIterations_, state_->trackerMaxPxPrecision_);
 
     mapManager_ = std::make_shared<MapManager>(state_, currFrame_, featureExtractor_);
-    mapper_ = std::make_unique<Mapper>(state_, mapManager_, currFrame_);
+    mapper_ = std::make_shared<Mapper>(state_, mapManager_, currFrame_);
     visualFrontend_ = std::make_unique<VisualFrontend>(state_, currFrame_, mapManager_, featureTracker_);
 }
 
@@ -38,28 +45,27 @@ void System::reset()
     visualFrontend_->reset();
     mapManager_->reset();
     state_->reset();
-
-    frameId_ = -1;
 }
 
 int System::findCameraPoseWithIMU(int imageRGBADataPtr, int imuDataPtr, int posePtr)
 {
-    auto *frameData = reinterpret_cast<uint8_t *>(imageRGBADataPtr);
+    auto *imageData = reinterpret_cast<uint8_t *>(imageRGBADataPtr);
     auto *imuData = reinterpret_cast<double *>(imuDataPtr);
     auto *poseData = reinterpret_cast<float *>(posePtr);
 
-    cv::Mat frame = cv::Mat(height_, width_, CV_8UC4, frameData);
-    cv::cvtColor(frame, frame, cv::COLOR_RGBA2GRAY);
+    cv::Mat image = cv::Mat(state_->imgHeight_, state_->imgWidth_, CV_8UC4, imageData);
+    cv::cvtColor(image, image, cv::COLOR_RGBA2GRAY);
 
-    //quaternion in format wxyz. -x to mirror slam format
+    //quaternion format: wxyz. -x to mirror slam format
     Eigen::Quaterniond orientation(imuData[0], -imuData[1], imuData[2], imuData[3]);
-    Eigen::Matrix3d rwc = orientation.toRotationMatrix().inverse();
+    Eigen::Matrix3d qwc = orientation.toRotationMatrix().inverse();
     Eigen::Vector3d twc(0.0, 0.0, 0.0);
+    Sophus::SE3d Twc(qwc, twc);
 
     int motionSampleSize = 7;
-    int motionSampleCount = (int) imuData[4] * motionSampleSize;
+    int motionSampleNum = (int) imuData[4] * motionSampleSize;
 
-    for (int i = 5; i < motionSampleCount; i += motionSampleSize)
+    for (int i = 5; i < motionSampleNum; i += motionSampleSize)
     {
         // { timestamp, gx, gy, gz, ax, ay, az }
         auto timestamp = (uint64_t) imuData[i];
@@ -67,25 +73,24 @@ int System::findCameraPoseWithIMU(int imageRGBADataPtr, int imuDataPtr, int pose
         Eigen::Vector3d acc(imuData[i + 4], imuData[i + 5], imuData[i + 6]);
     }
 
-    Utils::toPoseArray(rwc, twc, poseData);
+    Utils::toPoseArray(Twc, poseData);
 
     return 1;
 }
 
 int System::findCameraPose(int imageRGBADataPtr, int posePtr)
 {
-    auto *frameData = reinterpret_cast<uint8_t *>(imageRGBADataPtr);
+    auto *imageData = reinterpret_cast<uint8_t *>(imageRGBADataPtr);
     auto *poseData = reinterpret_cast<float *>(posePtr);
 
-    cv::Mat frame = cv::Mat(height_, width_, CV_8UC4, frameData);
-    cv::cvtColor(frame, frame, cv::COLOR_RGBA2GRAY);
+    cv::Mat image = cv::Mat(state_->imgHeight_, state_->imgWidth_, CV_8UC4, imageData);
+    cv::cvtColor(image, image, cv::COLOR_RGBA2GRAY);
 
-    int status = processCameraPose(frame);
+    uint64_t timestamp = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 
-    Eigen::Vector3d twc = currFrame_->getTwc().translation();
-    Eigen::Matrix3d rwc = currFrame_->getTwc().rotationMatrix();
+    int status = processCameraPose(image, timestamp);
 
-    Utils::toPoseArray(rwc, twc, poseData);
+    Utils::toPoseArray(currFrame_->getTwc(), poseData);
 
     return status;
 }
@@ -123,15 +128,12 @@ int System::getFramePoints(int pointsPtr)
     return numPoints;
 }
 
-int System::processCameraPose(cv::Mat &image)
+int System::processCameraPose(cv::Mat &image, double timestamp)
 {
-    frameId_++;
+    currFrame_->id_++;
+    currFrame_->timestamp_ = timestamp;
 
-    uint64_t timeStamp = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-
-    currFrame_->updateFrame(frameId_, timeStamp);
-
-    bool isKeyFrameRequired = visualFrontend_->visualTracking(image, timeStamp);
+    bool isKeyFrameRequired = visualFrontend_->visualTracking(image, timestamp);
 
     if (state_->slamResetRequested_)
     {
@@ -240,11 +242,8 @@ cv::Mat System::processPlane(int iterations)
     }
 
     // convert cam pos from Eigen to CV Mat format
-    Eigen::Vector3d twc = currFrame_->getTwc().translation();
-    Eigen::Matrix3d rwc = currFrame_->getTwc().rotationMatrix();
     cv::Mat camPose(4, 4, CV_32F);
-
-    Utils::toPoseMat(rwc, twc, camPose);
+    Utils::toPoseMat(currFrame_->getTwc(), camPose);
 
     // arbitrary orientation along normal
     float rang = -3.14f / 2 + ((float) rand() / (float) RAND_MAX) * 3.14f;

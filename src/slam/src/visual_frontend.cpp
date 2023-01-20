@@ -8,7 +8,6 @@ VisualFrontend::VisualFrontend(std::shared_ptr<State> state, std::shared_ptr<Fra
     cv::Size gridSize(state_->imgWidth_ / state_->claheTileSize_, state_->imgHeight_ / state_->claheTileSize_);
 
     clahe_ = cv::createCLAHE(state_->claheContrastLimit_, gridSize);
-    std::cout << "claheEnabled_: " << state_->claheEnabled_ << std::endl;
 }
 
 bool VisualFrontend::visualTracking(cv::Mat &image, double timestamp)

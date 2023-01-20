@@ -40,17 +40,13 @@ public:
 private:
     cv::Mat processPlane(int iterations = 50);
 
-    int processCameraPose(cv::Mat &image);
-
-    int width_;
-    int height_;
-    int frameId_ = -1;
+    int processCameraPose(cv::Mat &image, double timestamp);
 
     std::shared_ptr<State> state_;
     std::shared_ptr<Frame> currFrame_;
     std::shared_ptr<CameraCalibration> cameraCalibration_;
     std::shared_ptr<MapManager> mapManager_;
-    std::unique_ptr<Mapper> mapper_;
+    std::shared_ptr<Mapper> mapper_;
     std::unique_ptr<VisualFrontend> visualFrontend_;
     std::shared_ptr<FeatureExtractor> featureExtractor_;
     std::shared_ptr<FeatureTracker> featureTracker_;
