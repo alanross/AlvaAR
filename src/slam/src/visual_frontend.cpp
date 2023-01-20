@@ -5,17 +5,17 @@
 VisualFrontend::VisualFrontend(std::shared_ptr<State> state, std::shared_ptr<Frame> frame, std::shared_ptr<MapManager> mapManager, std::shared_ptr<FeatureTracker> featureTracker)
         : state_(state), currFrame_(frame), mapManager_(mapManager), featureTracker_(featureTracker)
 {
-    int tileSize = 50;
-    cv::Size claheGridSize(state_->imgWidth_ / tileSize, state_->imgHeight_ / tileSize);
+    cv::Size gridSize(state_->imgWidth_ / state_->claheTileSize_, state_->imgHeight_ / state_->claheTileSize_);
 
-    clahe_ = cv::createCLAHE(state_->claheContrastLimit_, claheGridSize);
+    clahe_ = cv::createCLAHE(state_->claheContrastLimit_, gridSize);
+    std::cout << "claheEnabled_: " << state_->claheEnabled_ << std::endl;
 }
 
 bool VisualFrontend::visualTracking(cv::Mat &image, double timestamp)
 {
-    bool keyFrameRequired = track(image, timestamp);
+    bool isKeyFrameRequired = track(image, timestamp);
 
-    if (keyFrameRequired)
+    if (isKeyFrameRequired)
     {
         mapManager_->createKeyframe(currImage_, image);
 
@@ -25,7 +25,7 @@ bool VisualFrontend::visualTracking(cv::Mat &image, double timestamp)
         }
     }
 
-    return keyFrameRequired;
+    return isKeyFrameRequired;
 }
 
 bool VisualFrontend::track(cv::Mat &image, double timestamp)

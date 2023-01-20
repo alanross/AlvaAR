@@ -45,6 +45,7 @@ public:
     // Image pre-processing
     bool claheEnabled_ = false;
     float claheContrastLimit_ = 3;
+    int claheTileSize_ = 50;
 
     // KLT parameters
     bool kltEnabled_ = true;
