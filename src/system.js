@@ -63,6 +63,7 @@ class AlvaAR
         this.memCam = new SharedMemory( wasm.module, wasm.module.HEAPF32, 16 );
         this.memObj = new SharedMemory( wasm.module, wasm.module.HEAPF32, 16 );
         this.memPts = new SharedMemory( wasm.module, wasm.module.HEAPU32, 4096 );
+        this.memIMU = new SharedMemory( wasm.module, wasm.module.HEAPF64, 256 );
         this.memImg = new SharedMemory( wasm.module, wasm.module.HEAPU8, width * height * 4 );
 
         this.system = new wasm.module.System();
@@ -86,22 +87,16 @@ class AlvaAR
         // | fx s cx |
         // | 0 fy cy |
         // | 0  0  1 |
-        //
+
         // fx/fy : X/Y-axis focal length of the camera in pixels.
         // cx/cy : Coordinates of principal point. X/Y-axis optical center of the camera in pixels.
-        // s : skew
-        //
-        // Distortion Matrix
-        // | k1 k2 p1 p2 k3 |
-        //
-        // k1 - p2 : distortion coefficients
-        //
-        // const angleOfView = 90;
-        // const fx = width / ( Math.tan( deg2rad( angleOfView / 2 ) ) * 2 );
-        // const fy = fx;
 
-        // const fx = width / 2 / Math.tan( angleOfView / 2 * Math.PI / 360 );
-        // const fy = height / 2 / Math.tan( angleOfView / 2 * Math.PI / 360 );
+        // angleOfView = 90;
+        // fx = width / ( Math.tan( deg2rad( angleOfView / 2 ) ) * 2 );
+        // fy = fx;
+
+        // fx = width / 2 / Math.tan( angleOfView / 2 * Math.PI / 360 );
+        // fy = height / 2 / Math.tan( angleOfView / 2 * Math.PI / 360 );
 
         let fovH;
         let fovV;
@@ -143,6 +138,36 @@ class AlvaAR
             p1: 0,
             p2: 0
         };
+    }
+
+    findCameraPoseWithIMU( frame, orientation, motion )
+    {
+        const imuData = [orientation.w, orientation.x, orientation.y, orientation.z, motion.length];
+
+        while( motion.length )
+        {
+            const sample = motion.pop();
+            imuData.push( sample.timestamp, sample.gx, sample.gy, sample.gz, sample.ax, sample.ay, sample.az );
+        }
+
+        this.memImg.write( frame.data );
+        this.memIMU.write( imuData );
+
+        const status = this.system.findCameraPoseWithIMU( this.memImg.heap.byteOffset, this.memIMU.heap.byteOffset, this.memCam.ptr );
+
+        if( status === 1 )
+        {
+            // memCam data format = [
+            //   r(0,0) r(0,1) r(0,2) 0
+            //   r(1,0) r(1,1) r(1,2) 0
+            //   r(2,0) r(2,1) r(2,2) 0
+            //   tx     ty     tz     1
+            // ]
+
+            return this.memCam.read( 16 );
+        }
+
+        return null;
     }
 
     findCameraPose( frame )

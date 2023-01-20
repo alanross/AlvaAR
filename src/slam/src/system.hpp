@@ -13,6 +13,7 @@
 #include "mapper.hpp"
 #include "map_manager.hpp"
 #include "state.hpp"
+#include "utils.hpp"
 #include "visual_frontend.hpp"
 
 class System
@@ -28,6 +29,8 @@ public:
 
     void reset();
 
+    int findCameraPoseWithIMU(int imageRGBADataPtr, int imuDataPtr, int posePtr);
+
     int findCameraPose(int imageRGBADataPtr, int posePtr);
 
     int findPlane(int locationPtr);
@@ -39,12 +42,8 @@ private:
 
     int processCameraPose(cv::Mat &image);
 
-    cv::Mat ExpSO3(const cv::Mat &v);
-
-    std::vector<Point3D> getPointCloud();
-
-    int width;
-    int height;
+    int width_;
+    int height_;
     int frameId_ = -1;
 
     std::shared_ptr<State> state_;

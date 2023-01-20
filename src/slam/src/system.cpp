@@ -4,6 +4,8 @@
 
 System::System()
 {
+    width_ = 0;
+    height_ = 0;
 }
 
 System::~System()
@@ -12,18 +14,20 @@ System::~System()
 
 void System::configure(int imageWidth, int imageHeight, double fx, double fy, double cx, double cy, double k1, double k2, double p1, double p2)
 {
-    width = imageWidth;
-    height = imageHeight;
+    width_ = imageWidth;
+    height_ = imageHeight;
 
     state_ = std::make_shared<State>(imageWidth, imageHeight);
-    cameraCalibration_ = std::make_shared<CameraCalibration>(fx, fy, cx, cy, k1, k2, p1, p2, imageWidth, imageHeight);
+    cameraCalibration_ = std::make_shared<CameraCalibration>(fx, fy, cx, cy, k1, k2, p1, p2, imageWidth, imageHeight, 20);
 
     currFrame_ = std::make_shared<Frame>(cameraCalibration_, state_->frameMaxCellSize_);
+
     featureExtractor_ = std::make_shared<FeatureExtractor>(state_->extractorMaxQuality_);
     featureTracker_ = std::make_shared<FeatureTracker>(state_->trackerMaxIterations_, state_->trackerMaxPxPrecision_);
+
     mapManager_ = std::make_shared<MapManager>(state_, currFrame_, featureExtractor_);
-    visualFrontend_ = std::make_unique<VisualFrontend>(state_, currFrame_, mapManager_, featureTracker_);
     mapper_ = std::make_unique<Mapper>(state_, mapManager_, currFrame_);
+    visualFrontend_ = std::make_unique<VisualFrontend>(state_, currFrame_, mapManager_, featureTracker_);
 }
 
 void System::reset()
@@ -38,12 +42,42 @@ void System::reset()
     frameId_ = -1;
 }
 
+int System::findCameraPoseWithIMU(int imageRGBADataPtr, int imuDataPtr, int posePtr)
+{
+    auto *frameData = reinterpret_cast<uint8_t *>(imageRGBADataPtr);
+    auto *imuData = reinterpret_cast<double *>(imuDataPtr);
+    auto *poseData = reinterpret_cast<float *>(posePtr);
+
+    cv::Mat frame = cv::Mat(height_, width_, CV_8UC4, frameData);
+    cv::cvtColor(frame, frame, cv::COLOR_RGBA2GRAY);
+
+    //quaternion in format wxyz. -x to mirror slam format
+    Eigen::Quaterniond orientation(imuData[0], -imuData[1], imuData[2], imuData[3]);
+    Eigen::Matrix3d rwc = orientation.toRotationMatrix().inverse();
+    Eigen::Vector3d twc(0.0, 0.0, 0.0);
+
+    int motionSampleSize = 7;
+    int motionSampleCount = (int) imuData[4] * motionSampleSize;
+
+    for (int i = 5; i < motionSampleCount; i += motionSampleSize)
+    {
+        // { timestamp, gx, gy, gz, ax, ay, az }
+        auto timestamp = (uint64_t) imuData[i];
+        Eigen::Vector3d gyr(imuData[i + 1], imuData[i + 2], imuData[i + 3]);
+        Eigen::Vector3d acc(imuData[i + 4], imuData[i + 5], imuData[i + 6]);
+    }
+
+    Utils::toPoseArray(rwc, twc, poseData);
+
+    return 1;
+}
+
 int System::findCameraPose(int imageRGBADataPtr, int posePtr)
 {
     auto *frameData = reinterpret_cast<uint8_t *>(imageRGBADataPtr);
     auto *poseData = reinterpret_cast<float *>(posePtr);
 
-    cv::Mat frame = cv::Mat(height, width, CV_8UC4, frameData);
+    cv::Mat frame = cv::Mat(height_, width_, CV_8UC4, frameData);
     cv::cvtColor(frame, frame, cv::COLOR_RGBA2GRAY);
 
     int status = processCameraPose(frame);
@@ -51,59 +85,23 @@ int System::findCameraPose(int imageRGBADataPtr, int posePtr)
     Eigen::Vector3d twc = currFrame_->getTwc().translation();
     Eigen::Matrix3d rwc = currFrame_->getTwc().rotationMatrix();
 
-    poseData[0] = rwc(0, 0);
-    poseData[1] = rwc(0, 1);
-    poseData[2] = rwc(0, 2);
-    poseData[3] = 0.0;
-
-    poseData[4] = rwc(1, 0);
-    poseData[5] = rwc(1, 1);
-    poseData[6] = rwc(1, 2);
-    poseData[7] = 0.0;
-
-    poseData[8] = rwc(2, 0);
-    poseData[9] = rwc(2, 1);
-    poseData[10] = rwc(2, 2);
-    poseData[11] = 0.0;
-
-    poseData[12] = twc.x();
-    poseData[13] = twc.y();
-    poseData[14] = twc.z();
-    poseData[15] = 1.0;
+    Utils::toPoseArray(rwc, twc, poseData);
 
     return status;
 }
 
 int System::findPlane(int locationPtr)
 {
-    cv::Mat m = processPlane(50);
+    cv::Mat mat = processPlane(50);
 
-    if (m.empty())
+    if (mat.empty())
     {
         return 0;
     }
 
     auto *poseData = reinterpret_cast<float *>(locationPtr);
 
-    poseData[0] = m.at<float>(0, 0);
-    poseData[1] = m.at<float>(1, 0);
-    poseData[2] = m.at<float>(2, 0);
-    poseData[3] = 0.0;
-
-    poseData[4] = m.at<float>(0, 1);
-    poseData[5] = m.at<float>(1, 1);
-    poseData[6] = m.at<float>(2, 1);
-    poseData[7] = 0.0;
-
-    poseData[8] = m.at<float>(0, 2);
-    poseData[9] = m.at<float>(1, 2);
-    poseData[10] = m.at<float>(2, 2);
-    poseData[11] = 0.0;
-
-    poseData[12] = m.at<float>(0, 3);
-    poseData[13] = m.at<float>(1, 3);
-    poseData[14] = m.at<float>(2, 3);
-    poseData[15] = 1.0;
+    Utils::toPoseArray(mat, poseData);
 
     return 1;
 }
@@ -245,25 +243,8 @@ cv::Mat System::processPlane(int iterations)
     Eigen::Vector3d twc = currFrame_->getTwc().translation();
     Eigen::Matrix3d rwc = currFrame_->getTwc().rotationMatrix();
     cv::Mat camPose(4, 4, CV_32F);
-    camPose.at<float>(0, 0) = rwc(0, 0);
-    camPose.at<float>(0, 1) = rwc(1, 0);
-    camPose.at<float>(0, 2) = rwc(2, 0);
-    camPose.at<float>(0, 3) = twc.x();
 
-    camPose.at<float>(1, 0) = rwc(0, 1);
-    camPose.at<float>(1, 1) = rwc(1, 1);
-    camPose.at<float>(1, 2) = rwc(2, 1);
-    camPose.at<float>(1, 3) = twc.y();
-
-    camPose.at<float>(2, 0) = rwc(0, 2);
-    camPose.at<float>(2, 1) = rwc(1, 2);
-    camPose.at<float>(2, 2) = rwc(2, 2);
-    camPose.at<float>(2, 3) = twc.z();
-
-    camPose.at<float>(3, 0) = 0.0;
-    camPose.at<float>(3, 1) = 0.0;
-    camPose.at<float>(3, 2) = 0.0;
-    camPose.at<float>(3, 3) = 1.0;
+    Utils::toPoseMat(rwc, twc, camPose);
 
     // arbitrary orientation along normal
     float rang = -3.14f / 2 + ((float) rand() / (float) RAND_MAX) * 3.14f;
@@ -318,37 +299,8 @@ cv::Mat System::processPlane(int iterations)
 
     plane = cv::Mat::eye(4, 4, CV_32F);
 
-    plane.rowRange(0, 3).colRange(0, 3) = ExpSO3(v * ang / sa) * ExpSO3(up * rang);
+    plane.rowRange(0, 3).colRange(0, 3) = Utils::expSO3(v * ang / sa) * Utils::expSO3(up * rang);
     origin.copyTo(plane.col(3).rowRange(0, 3));
 
     return plane;
-}
-
-std::vector<Point3D> System::getPointCloud()
-{
-    return mapManager_->pointCloud_;
-}
-
-cv::Mat System::ExpSO3(const cv::Mat &v)
-{
-    const float x = v.at<float>(0);
-    const float y = v.at<float>(1);
-    const float z = v.at<float>(2);
-    const float eps = 1e-4;
-
-    cv::Mat I = cv::Mat::eye(3, 3, CV_32F);
-
-    const float d2 = x * x + y * y + z * z;
-    const float d = sqrt(d2);
-
-    cv::Mat W = (cv::Mat_<float>(3, 3) << 0, -z, y, z, 0, -x, -y, x, 0);
-
-    if (d < eps)
-    {
-        return (I + W + 0.5f * W * W);
-    }
-    else
-    {
-        return (I + W * sin(d) / d + W * W * (1.0f - cos(d)) / d2);
-    }
 }

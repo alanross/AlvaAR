@@ -136,8 +136,8 @@
 <script type="module">
     import { Stats } from "./assets/stats.js";
     import { AlvaAR } from './assets/alva_ar.js';
-    import { ARIMUView } from "./assets/view.js";
-    import { DeviceOrientationSensor, } from "./assets/orientation.js";
+    import { ARCamView } from "./assets/view.js";
+    import { IMU } from "./assets/imu.js";
     import { Camera, onFrame, resize2cover } from "./assets/utils.js";
 
     function main()
@@ -162,7 +162,7 @@
         $splash.style.transition = `opacity ${ splashFadeTime / 1000 }s ease`;
         $splash.style.opacity = 0;
 
-        async function demo( media, sensor )
+        async function demo( media, imu )
         {
             const $video = media.el;
 
@@ -175,15 +175,19 @@
 
             const ctx = $canvas.getContext( '2d', { alpha: false, desynchronized: true } );
             const alva = await AlvaAR.Initialize( $canvas.width, $canvas.height );
-            const view = new ARIMUView( $view, $canvas.width, $canvas.height );
+            const view = new ARCamView( $view, $canvas.width, $canvas.height );
 
             Stats.add( 'total' );
+            Stats.add( 'video' );
+            Stats.add( 'slam' );
 
             $container.appendChild( $canvas );
             $container.appendChild( $view );
 
             document.body.appendChild( Stats.el );
-            document.body.addEventListener( "click", () => alva.reset() || view.reset(), false );
+            document.body.addEventListener( "click", () => alva.reset(), false );
+
+            imu.clear();
 
             onFrame( () =>
             {
@@ -192,14 +196,25 @@
 
                 ctx.clearRect( 0, 0, $canvas.width, $canvas.height );
 
-                if( !document['hidden'] && sensor.screenOrientationAngle === 0 )
+                if( !document['hidden'] )
                 {
+                    Stats.start( 'video' );
                     ctx.drawImage( $video, 0, 0, $video.videoWidth, $video.videoHeight, size.x, size.y, size.width, size.height );
+                    const frame = ctx.getImageData( 0, 0, $canvas.width, $canvas.height );
+                    Stats.stop( 'video' );
 
-                    const pose = alva.findCameraPose( ctx.getImageData( 0, 0, $canvas.width, $canvas.height ) );
+                    Stats.start( 'slam' );
+                    const pose = alva.findCameraPoseWithIMU( frame, imu.orientation, imu.motion );
+                    Stats.stop( 'slam' );
 
-                    if( !pose )
+                    if( pose )
                     {
+                        view.updateCameraPose( pose );
+                    }
+                    else
+                    {
+                        view.lostCamera();
+
                         const dots = alva.getFramePoints();
 
                         for( const p of dots )
@@ -208,14 +223,6 @@
                             ctx.fillRect( p.x, p.y, 2, 2 );
                         }
                     }
-
-                    view.updateCameraPose(
-                        pose,
-                        sensor.deviceOrientationAlpha,
-                        sensor.deviceOrientationBeta,
-                        sensor.deviceOrientationGamma,
-                        sensor.screenOrientationAngle
-                    );
                 }
 
                 Stats.stop( 'total' );
@@ -235,10 +242,10 @@
                 {
                     $overlay.remove();
 
-                    const sensor = await DeviceOrientationSensor.Initialize();
-                    const media = await Camera.Initialize( config );
+                    const imu = await IMU.Initialize();
+                    const cam = await Camera.Initialize( config );
 
-                    await demo( media, sensor );
+                    await demo( cam, imu );
                 } catch( error )
                 {
                     alert( 'Error: ' + error );
