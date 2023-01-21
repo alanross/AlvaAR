@@ -12,7 +12,7 @@ System::~System()
 
 void System::configure(int imageWidth, int imageHeight, double fx, double fy, double cx, double cy, double k1, double k2, double p1, double p2)
 {
-    state_ = std::make_shared<State>(imageWidth, imageHeight, 40 );
+    state_ = std::make_shared<State>(imageWidth, imageHeight, 40);
     state_->claheEnabled_ = false;
     state_->mapKeyframeFilteringRatio_ = 0.95;
     state_->p3pEnabled_ = true;
@@ -96,9 +96,9 @@ int System::findCameraPose(int imageRGBADataPtr, int posePtr)
     return status;
 }
 
-int System::findPlane(int locationPtr)
+int System::findPlane(int locationPtr, int numIterations)
 {
-    cv::Mat mat = processPlane(50);
+    cv::Mat mat = processPlane(mapManager_->getCurrentFrameMapPoints(), currFrame_->getTwc(), numIterations);
 
     if (mat.empty())
     {
@@ -150,27 +150,25 @@ int System::processCameraPose(cv::Mat &image, double timestamp)
     return 1;
 }
 
-cv::Mat System::processPlane(int iterations)
+cv::Mat System::processPlane(std::vector<Eigen::Vector3d> mapPoints, Sophus::SE3d Twc, int numIterations)
 {
-    cv::Mat plane;
+    cv::Mat planePose;
 
-    std::vector<Eigen::Vector3d> mapPoints = mapManager_->getCurrentFrameMapPoints();
+    const long numMapPoints = mapPoints.size();
 
-    const long numMapPointsAll = mapPoints.size();
-
-    if (numMapPointsAll < 16)
+    if (numMapPoints < 16)
     {
-        std::cout << "- [System]: Too few points to detect plane: " << numMapPointsAll << std::endl;
+        std::cout << "- [System]: Too few points to detect plane: " << numMapPoints << std::endl;
 
-        return plane; //empty plane
+        return planePose;
     }
 
-    std::vector<cv::Mat> points(numMapPointsAll);
-    std::vector<int> indices(numMapPointsAll);
+    std::vector<cv::Mat> points(numMapPoints);
+    std::vector<int> indices(numMapPoints);
     std::vector<float> distances;
     float bestDist = 1e10;
 
-    for (int i = 0; i < numMapPointsAll; i++)
+    for (int i = 0; i < numMapPoints; i++)
     {
         cv::Mat pointWorldPos(1, 3, CV_32F);
         cv::eigen2cv(mapPoints[i], pointWorldPos);
@@ -179,7 +177,7 @@ cv::Mat System::processPlane(int iterations)
     }
 
     //RANSAC to find inliers
-    for (int n = 0; n < iterations; n++)
+    for (int n = 0; n < numIterations; n++)
     {
         // Pick 3 random points
         int numToPick = 3;
@@ -202,11 +200,11 @@ cv::Mat System::processPlane(int iterations)
         const float c = vt.at<float>(3, 2);
         const float d = vt.at<float>(3, 3);
 
-        std::vector<float> dists(numMapPointsAll, 0);
+        std::vector<float> dists(numMapPoints, 0);
 
         const float f = 1.0f / std::sqrt(a * a + b * b + c * c + d * d);
 
-        for (int i = 0; i < numMapPointsAll; i++)
+        for (int i = 0; i < numMapPoints; i++)
         {
             dists[i] = std::fabs(points[i].at<float>(0) * a + points[i].at<float>(1) * b + points[i].at<float>(2) * c + d) * f;
         }
@@ -214,7 +212,7 @@ cv::Mat System::processPlane(int iterations)
         std::vector<float> distsSorted = dists;
         sort(distsSorted.begin(), distsSorted.end());
 
-        int nth = std::max((int) (0.2 * numMapPointsAll), 20);
+        int nth = std::max((int) (0.2 * numMapPoints), 20);
         const float medianDist = distsSorted[nth];
 
         if (medianDist < bestDist)
@@ -228,7 +226,7 @@ cv::Mat System::processPlane(int iterations)
     const float threshold = 1.4 * bestDist;
     std::vector<cv::Mat> pointsInliers;
 
-    for (int i = 0; i < numMapPointsAll; i++)
+    for (int i = 0; i < numMapPoints; i++)
     {
         if (distances[i] < threshold)
         {
@@ -238,7 +236,7 @@ cv::Mat System::processPlane(int iterations)
 
     // convert cam pos from Eigen to CV Mat format
     cv::Mat camPose(4, 4, CV_32F);
-    Utils::toPoseMat(currFrame_->getTwc(), camPose);
+    Utils::toPoseMat(Twc, camPose);
 
     // arbitrary orientation along normal
     float rang = -3.14f / 2 + ((float) rand() / (float) RAND_MAX) * 3.14f;
@@ -291,10 +289,10 @@ cv::Mat System::processPlane(int iterations)
     const float ca = up.dot(normal);
     const float ang = atan2(sa, ca);
 
-    plane = cv::Mat::eye(4, 4, CV_32F);
+    planePose = cv::Mat::eye(4, 4, CV_32F);
 
-    plane.rowRange(0, 3).colRange(0, 3) = Utils::expSO3(v * ang / sa) * Utils::expSO3(up * rang);
-    origin.copyTo(plane.col(3).rowRange(0, 3));
+    planePose.rowRange(0, 3).colRange(0, 3) = Utils::expSO3(v * ang / sa) * Utils::expSO3(up * rang);
+    origin.copyTo(planePose.col(3).rowRange(0, 3));
 
-    return plane;
+    return planePose;
 }

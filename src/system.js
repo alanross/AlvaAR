@@ -199,9 +199,9 @@ class AlvaAR
         return null;
     }
 
-    findPlane()
+    findPlane( numIterations = 50 )
     {
-        const status = this.system.findPlane( this.memObj.ptr );
+        const status = this.system.findPlane( this.memObj.ptr, numIterations );
 
         if( status === 1 )
         {

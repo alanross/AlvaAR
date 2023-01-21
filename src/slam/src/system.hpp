@@ -33,12 +33,12 @@ public:
 
     int findCameraPose(int imageRGBADataPtr, int posePtr);
 
-    int findPlane(int locationPtr);
+    int findPlane(int locationPtr, int numIterations);
 
     int getFramePoints(int pointsPtr);
 
 private:
-    cv::Mat processPlane(int iterations = 50);
+    cv::Mat processPlane(std::vector<Eigen::Vector3d> mapPoints, Sophus::SE3d Twc, int numIterations = 50);
 
     int processCameraPose(cv::Mat &image, double timestamp);
 
