@@ -34,7 +34,8 @@ void System::configure(int imageWidth, int imageHeight, double fx, double fy, do
 
     mapManager_ = std::make_shared<MapManager>(state_, currFrame_, featureExtractor_);
     mapper_ = std::make_shared<Mapper>(state_, mapManager_, currFrame_);
-    visualFrontend_ = std::make_unique<VisualFrontend>(state_, currFrame_, mapManager_, featureTracker_);
+
+    visualFrontend_ = std::make_unique<VisualFrontend>(state_, currFrame_, mapManager_, mapper_, featureTracker_);
 }
 
 void System::reset()
@@ -133,7 +134,7 @@ int System::processCameraPose(cv::Mat &image, double timestamp)
     currFrame_->id_++;
     currFrame_->timestamp_ = timestamp;
 
-    bool isKeyFrameRequired = visualFrontend_->visualTracking(image, timestamp);
+    visualFrontend_->track(image, timestamp);
 
     if (state_->slamResetRequested_)
     {
@@ -144,12 +145,6 @@ int System::processCameraPose(cv::Mat &image, double timestamp)
     if (!state_->slamReadyForInit_)
     {
         return 3;
-    }
-
-    if (isKeyFrameRequired)
-    {
-        Keyframe kf(currFrame_->keyframeId_, image);
-        mapper_->addNewKeyframe(kf);
     }
 
     return 1;
