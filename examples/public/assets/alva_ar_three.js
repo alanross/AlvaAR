@@ -28,16 +28,11 @@ class AlvaARConnectorTHREE
     {
         return ( pose, rotationQuaternion, translationVector ) =>
         {
-            const m = new THREE.Matrix4();
-            const q = new THREE.Quaternion();
+            const m = new THREE.Matrix4().fromArray( pose );
+            const r = new THREE.Quaternion().setFromRotationMatrix( m );
             const t = new THREE.Vector3( pose[12], pose[13], pose[14] );
-            const a = new THREE.Quaternion().setFromAxisAngle( new THREE.Vector3( 1, 0, 0 ), 0 );
 
-            m.fromArray( pose );
-            q.setFromRotationMatrix( m );
-            q.multiply( a );
-
-            ( rotationQuaternion !== null ) && rotationQuaternion.set( -q.x, q.y, q.z, q.w );
+            ( rotationQuaternion !== null ) && rotationQuaternion.set( -r.x, r.y, r.z, r.w );
             ( translationVector !== null ) && translationVector.set( t.x, -t.y, -t.z );
         }
     }

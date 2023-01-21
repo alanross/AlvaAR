@@ -12,6 +12,7 @@ EMSCRIPTEN_BINDINGS(Module)
         .constructor()
         .function("configure", &System::configure)
         .function("reset", &System::reset)
+        .function("findCameraPoseWithIMU", &System::findCameraPoseWithIMU, allow_raw_pointers())
         .function("findCameraPose", &System::findCameraPose, allow_raw_pointers())
         .function("findPlane", &System::findPlane)
         .function("getFramePoints", &System::getFramePoints);

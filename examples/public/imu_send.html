@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no" name="viewport"/>
+    <meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+    <title>AlvaAR IMU Emitter</title>
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            font-family: 'Helvetica', sans-serif;
+            width: 100vw;
+            height: 100vh;
+            font-size: 10px;
+            font-weight: 300;
+            background: #eee;
+        }
+
+        #status {
+            text-align: center;
+            line-height: 30px;
+            height: 30px
+        }
+
+        #gyr,
+        #acc {
+            width: 100%;
+            height: 180px;
+            background: black;
+            display: block;
+            margin-bottom: 1px;
+        }
+
+        #info {
+            padding: 0 0 0 10px;
+        }
+
+        #info ul {
+            list-style-type: none;
+        }
+
+        #info h4 {
+            margin: 10px 0 2px 0
+        }
+
+        #info table {
+            table-layout: fixed;
+            border-collapse: collapse;
+            width: 120px;
+        }
+
+        #info td:first-child {
+            width: 60px;
+            vertical-align: top;
+        }
+
+        #info td:last-child {
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+<canvas id="acc"></canvas>
+<canvas id="gyr"></canvas>
+<div id="status">Tap black area to request device orientation data</div>
+<div id="info">
+    <h4>Orientation</h4>
+    <table>
+        <tr>
+            <td>X-axis (β, ㎭)</td>
+            <td id="orientation_x">-</td>
+        </tr>
+        <tr>
+            <td>Y-axis (γ, ㎭)</td>
+            <td id="orientation_y">-</td>
+        </tr>
+        <tr>
+            <td>Z-axis (α, ㎭)</td>
+            <td id="orientation_z">-</td>
+        </tr>
+    </table>
+
+    <h4>Gyroscope</h4>
+    <table>
+        <tr>
+            <td>X-axis (㎭/s)</td>
+            <td id="motion_gyr_x">-</td>
+        </tr>
+        <tr>
+            <td>Y-axis (㎭/s)</td>
+            <td id="motion_gyr_y">-</td>
+        </tr>
+        <tr>
+            <td>Z-axis (㎭/s)</td>
+            <td id="motion_gyr_z">-</td>
+        </tr>
+    </table>
+
+    <h4>Accelerometer</h4>
+    <table>
+        <tr>
+            <td>X-axis (m/s<sup>2</sup>)</td>
+            <td id="motion_acc_x">-</td>
+        </tr>
+        <tr>
+            <td>Y-axis (m/s<sup>2</sup>)</td>
+            <td id="motion_acc_y">-</td>
+        </tr>
+        <tr>
+            <td>Z-axis (m/s<sup>2</sup>)</td>
+            <td id="motion_acc_z">-</td>
+        </tr>
+    </table>
+
+    <h4>Accelerometer (incl. gravity)</h4>
+    <table>
+        <tr>
+            <td>X-axis (m/s<sup>2</sup>)</td>
+            <td id="motion_acc_g_x">-</td>
+        </tr>
+        <tr>
+            <td>Y-axis (m/s<sup>2</sup>)</td>
+            <td id="motion_acc_g_y">-</td>
+        </tr>
+        <tr>
+            <td>Z-axis (m/s<sup>2</sup>)</td>
+            <td id="motion_acc_g_z">-</td>
+        </tr>
+    </table>
+</div>
+<script type="module">
+    import { io } from "https://cdn.socket.io/4.4.1/socket.io.esm.min.js";
+
+    async function main()
+    {
+        const socket = io();
+
+        const ctxAcc = document.getElementById( "acc" ).getContext( "2d" );
+        const ctxGyr = document.getElementById( "gyr" ).getContext( "2d" );
+
+        const deg2rad = Math.PI / 180;
+
+        let _orientation = { x: 0, y: 0, z: 0 };
+        let _orientationTime = 0;
+
+        let _motionGyr = { x: 0, y: 0, z: 0 };
+        let _motionAcc = { x: 0, y: 0, z: 0 };
+        let _motionAccG = { x: 0, y: 0, z: 0 };
+        let _motionTime = 0;
+
+        let _graphLinePos = 0;
+
+        function requestDeviceMotion( onSuccess, onFailure )
+        {
+            if( window.DeviceMotionEvent && DeviceMotionEvent.requestPermission )
+            {
+                DeviceMotionEvent.requestPermission().then( ( state ) =>
+                {
+                    if( state === "granted" )
+                    {
+                        onSuccess();
+                    }
+                    else
+                    {
+                        onFailure( new Error( "Permission denied by user" ) );
+                    }
+                }, ( error ) =>
+                {
+                    onFailure( error );
+                } );
+            }
+            else if( window.ondevicemotion !== undefined )
+            {
+                onSuccess();
+            }
+            else
+            {
+                onFailure( new Error( "DeviceMotion is not supported." ) );
+            }
+        }
+
+        function renderGraph( ctx, x, y, z, pos, scale = 1, type = "bar" )
+        {
+            const canvasW = parseInt( ctx.canvas.style.width, 10 );
+            const canvasH = parseInt( ctx.canvas.style.height, 10 );
+
+            const bandH = canvasH / 3;
+            const bandH2 = bandH / 2;
+
+            pos = pos % canvasW;
+
+            x = Math.round( Math.max( -bandH2, Math.min( x * scale, bandH2 ) ) );
+            y = Math.round( Math.max( -bandH2, Math.min( y * scale, bandH2 ) ) );
+            z = Math.round( Math.max( -bandH2, Math.min( z * scale, bandH2 ) ) );
+
+            ctx.fillStyle = "#fff";
+            ctx.fillRect( pos, 0, 2, canvasH );
+            ctx.clearRect( pos, 0, 1, canvasH );
+
+            if( type === "bar" )
+            {
+                ctx.fillStyle = "red";
+                (x >= 0) ? ctx.fillRect( pos, bandH * 0 + bandH2, 1, x + 1 ) : ctx.fillRect( pos, bandH * 0 + bandH2 + x, 1, -x + 1 );
+
+                ctx.fillStyle = "lime";
+                (y >= 0) ? ctx.fillRect( pos, bandH * 1 + bandH2, 1, y + 1 ) : ctx.fillRect( pos, bandH * 1 + bandH2 + y, 1, -y + 1 );
+
+                ctx.fillStyle = "aqua";
+                (z >= 0) ? ctx.fillRect( pos, bandH * 2 + bandH2, 1, z + 1 ) : ctx.fillRect( pos, bandH * 2 + bandH2 + z, 1, -z + 1 );
+            }
+            if( type === "dot" )
+            {
+                ctx.fillStyle = "red";
+                ctx.fillRect( pos, bandH * 0 + bandH2 + x, 1, 1 );
+
+                ctx.fillStyle = "lime";
+                ctx.fillRect( pos, bandH * 1 + bandH2 + y, 1, 1 );
+
+                ctx.fillStyle = "aqua";
+                ctx.fillRect( pos, bandH * 2 + bandH2 + z, 1, 1 );
+            }
+        }
+
+        function renderInfo( idPrefix, o, precision = 5 )
+        {
+            document.getElementById( `${ idPrefix }x` ).innerHTML = o.x.toFixed( precision );
+            document.getElementById( `${ idPrefix }y` ).innerHTML = o.y.toFixed( precision );
+            document.getElementById( `${ idPrefix }z` ).innerHTML = o.z.toFixed( precision );
+        }
+
+        function emitMotionData( time, gx, gy, gz, ax, ay, az )
+        {
+            socket.emit( 'data', { type: 'motion', time, gx, gy, gz, ax, ay, az } );
+        }
+
+        function emitOrientationData( time, x, y, z )
+        {
+            socket.emit( 'data', { type: 'orientation', time, x, y, z } );
+        }
+
+        function onDeviceMotion( event )
+        {
+            _motionAcc.x = event.acceleration.x; // (m/s^2)
+            _motionAcc.y = event.acceleration.y; // (m/s^2)
+            _motionAcc.z = event.acceleration.z; // (m/s^2)
+
+            _motionAccG.x = event.accelerationIncludingGravity.x; // (m/s^2)
+            _motionAccG.y = event.accelerationIncludingGravity.y; // (m/s^2)
+            _motionAccG.z = event.accelerationIncludingGravity.z; // (m/s^2)
+
+            _motionGyr.x = event.rotationRate.beta * deg2rad;   // X-axis (β) deg to rad: rad/s
+            _motionGyr.y = event.rotationRate.gamma * deg2rad;  // Y-axis (γ) deg to rad: rad/s
+            _motionGyr.z = event.rotationRate.alpha * deg2rad;  // Z-axis (α) deg to rad: rad/s
+
+            _motionTime = Date.now();
+
+            emitMotionData( _motionTime, _motionGyr.x, _motionGyr.y, _motionGyr.z, _motionAcc.x, _motionAcc.y, _motionAcc.z );
+
+            renderGraph( ctxAcc, _motionAcc.x, _motionAcc.y, _motionAcc.z, _graphLinePos, 3, "bar" );
+            renderGraph( ctxGyr, _motionGyr.x, _motionGyr.y, _motionGyr.z, _graphLinePos, 3, "dot" );
+
+            renderInfo( 'motion_gyr_', _motionGyr )
+            renderInfo( 'motion_acc_', _motionAcc )
+            renderInfo( 'motion_acc_g_', _motionAccG )
+
+            _graphLinePos++;
+        }
+
+        function onDeviceOrientation( event )
+        {
+            _orientation.x = event.beta * deg2rad;    // X-axis (β)
+            _orientation.y = event.gamma * deg2rad;   // Y-axis (γ)
+            _orientation.z = event.alpha * deg2rad;   // Z-axis (α)
+
+            _orientationTime = Date.now();
+
+            emitOrientationData( _orientationTime, _orientation.x, _orientation.y, _orientation.z );
+
+            renderInfo( 'orientation_', _orientation );
+        }
+
+        function resizeCanvas()
+        {
+            const f = ( ctx ) =>
+            {
+                ctx.canvas.width = window.innerWidth || document.body.offsetWidth;
+                ctx.canvas.height = 180;
+
+                if( window.devicePixelRatio > 1 )
+                {
+                    const w = ctx.canvas.width;
+                    const h = ctx.canvas.height;
+
+                    ctx.canvas.width = w * window.devicePixelRatio;
+                    ctx.canvas.height = h * window.devicePixelRatio;
+                    ctx.canvas.style.width = w + "px";
+                    ctx.canvas.style.height = h + "px";
+
+                    ctx.scale( window.devicePixelRatio, window.devicePixelRatio );
+                }
+            }
+
+            f( ctxAcc );
+            f( ctxGyr );
+        }
+
+        function onMotionRequestSuccess( error )
+        {
+            document.getElementById( "status" ).remove();
+
+            window.removeEventListener( "click", onActivate );
+            window.removeEventListener( "touchend", onActivate );
+
+            window.addEventListener( 'devicemotion', onDeviceMotion );
+            window.addEventListener( 'deviceorientation', onDeviceOrientation, false );
+        }
+
+        function onMotionRequestFailure( error )
+        {
+            document.getElementById( "status" ).innerText = "" + error;
+        }
+
+        function onActivate( event )
+        {
+            document.getElementById( "status" ).innerText = "Requesting device orientation data...";
+
+            requestDeviceMotion( onMotionRequestSuccess, onMotionRequestFailure );
+        }
+
+        window.addEventListener( "click", onActivate );
+        window.addEventListener( "touchend", onActivate );
+        window.addEventListener( "resize", resizeCanvas );
+
+        resizeCanvas();
+    }
+
+    window.addEventListener( 'load', main );
+</script>
+</body>
+</html>

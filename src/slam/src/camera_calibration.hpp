@@ -23,7 +23,7 @@ public:
     CameraCalibration()
     {}
 
-    CameraCalibration(double fx, double fy, double cx, double cy, double k1, double k2, double p1, double p2, double imgWidth, double imgHeight);
+    CameraCalibration(double fx, double fy, double cx, double cy, double k1, double k2, double p1, double p2, double imgWidth, double imgHeight, double imgBorder);
 
     cv::Point2f projectCamToImageDist(const Eigen::Vector3d &point) const;
 
@@ -40,6 +40,7 @@ public:
 
     double imgWidth_;
     double imgHeight_;
+    double imgBorder_;
 
     cv::Mat Kcv_;
     cv::Mat Dcv_;

@@ -5,6 +5,7 @@
 #include <opencv2/imgproc.hpp>
 #include "state.hpp"
 #include "map_manager.hpp"
+#include "mapper.hpp"
 #include "feature_tracker.hpp"
 
 class MotionModel
@@ -75,17 +76,16 @@ public:
     VisualFrontend()
     {}
 
-    VisualFrontend(std::shared_ptr<State> state, std::shared_ptr<Frame> frame, std::shared_ptr<MapManager> mapManager, std::shared_ptr<FeatureTracker> featureTracker);
+    VisualFrontend(std::shared_ptr<State> state, std::shared_ptr<Frame> frame, std::shared_ptr<MapManager> mapManager, std::shared_ptr<Mapper> mapper, std::shared_ptr<FeatureTracker> featureTracker);
 
-    bool visualTracking(cv::Mat &image, double timestamp);
+    void track(cv::Mat &image, double timestamp);
 
     void reset();
 
 private:
-    // Perform tracking in one image, update kps and map point obs, return true if a new keyframe is req.
-    bool track(cv::Mat &image, double timestamp);
+    bool process(cv::Mat &image, double timestamp);
 
-    void preprocessImage(cv::Mat &imageRaw);
+    void preprocessImage(cv::Mat &image);
 
     // KLT Tracking with motion prior
     void kltTracking();
@@ -109,6 +109,7 @@ private:
     std::shared_ptr<State> state_;
     std::shared_ptr<Frame> currFrame_;
     std::shared_ptr<MapManager> mapManager_;
+    std::shared_ptr<Mapper> mapper_;
     std::shared_ptr<FeatureTracker> featureTracker_;
 
     cv::Ptr<cv::CLAHE> clahe_;

@@ -1,26 +1,14 @@
 #include "state.hpp"
 
-State::State(double imgWidth, double imgHeight )
+State::State(double imgWidth, double imgHeight, int frameMaxCellSize)
 {
     imgWidth_ = imgWidth;
     imgHeight_ = imgHeight;
 
-    frameMaxCellSize_ = 40;
-    claheEnabled_ = false;
-    mapKeyframeFilteringRatio_ = 0.95;
-    p3pEnabled_ = true;
-
+    frameMaxCellSize_ = frameMaxCellSize;
     float numCellsW = ceil((float) imgWidth_ / (float) frameMaxCellSize_);
     float numCellsH = ceil((float) imgHeight_ / (float) frameMaxCellSize_);
     frameMaxNumKeypoints_ = (int) (numCellsW * numCellsH);
-
-    std::cout << "- [State]: Config";
-    std::cout << ": width: " << imgWidth;
-    std::cout << ", height: " << imgHeight;
-    std::cout << ", Frame Max Cell Size: " << frameMaxCellSize_;
-    std::cout << ", CLAHE Enabled: " << claheEnabled_;
-    std::cout << ", Map Keyframe Filtering Ratio: " << mapKeyframeFilteringRatio_;
-    std::cout << ", P3P Enabled: " << p3pEnabled_ << std::endl;
 }
 
 void State::reset()

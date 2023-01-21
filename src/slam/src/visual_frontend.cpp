@@ -2,20 +2,20 @@
 #include "multi_view_geometry.hpp"
 #include <opencv2/video/tracking.hpp>
 
-VisualFrontend::VisualFrontend(std::shared_ptr<State> state, std::shared_ptr<Frame> frame, std::shared_ptr<MapManager> mapManager, std::shared_ptr<FeatureTracker> featureTracker)
-        : state_(state), currFrame_(frame), mapManager_(mapManager), featureTracker_(featureTracker)
+VisualFrontend::VisualFrontend(std::shared_ptr<State> state, std::shared_ptr<Frame> frame, std::shared_ptr<MapManager> mapManager, std::shared_ptr<Mapper> mapper,
+                               std::shared_ptr<FeatureTracker> featureTracker)
+        : state_(state), currFrame_(frame), mapManager_(mapManager), mapper_(mapper), featureTracker_(featureTracker)
 {
-    int tileSize = 50;
-    cv::Size claheGridSize(state_->imgWidth_ / tileSize, state_->imgHeight_ / tileSize);
+    cv::Size gridSize(state_->imgWidth_ / state_->claheTileSize_, state_->imgHeight_ / state_->claheTileSize_);
 
-    clahe_ = cv::createCLAHE(state_->claheContrastLimit_, claheGridSize);
+    clahe_ = cv::createCLAHE(state_->claheContrastLimit_, gridSize);
 }
 
-bool VisualFrontend::visualTracking(cv::Mat &image, double timestamp)
+void VisualFrontend::track(cv::Mat &image, double timestamp)
 {
-    bool keyFrameRequired = track(image, timestamp);
+    bool isKeyFrameRequired = process(image, timestamp);
 
-    if (keyFrameRequired)
+    if (isKeyFrameRequired)
     {
         mapManager_->createKeyframe(currImage_, image);
 
@@ -23,12 +23,16 @@ bool VisualFrontend::visualTracking(cv::Mat &image, double timestamp)
         {
             cv::buildOpticalFlowPyramid(currImage_, keyframePyramid_, state_->kltWinSize_, state_->kltPyramidLevels_);
         }
-    }
 
-    return keyFrameRequired;
+        if (!state_->slamResetRequested_ && state_->slamReadyForInit_)
+        {
+            Keyframe kf(currFrame_->keyframeId_, image);
+            mapper_->addNewKeyframe(kf);
+        }
+    }
 }
 
-bool VisualFrontend::track(cv::Mat &image, double timestamp)
+bool VisualFrontend::process(cv::Mat &image, double timestamp)
 {
     preprocessImage(image);
 
@@ -1015,7 +1019,7 @@ float VisualFrontend::computeParallax(const int keyframeId, bool doUnRotate, boo
     return avgParallax;
 }
 
-void VisualFrontend::preprocessImage(cv::Mat &imageRaw)
+void VisualFrontend::preprocessImage(cv::Mat &image)
 {
     // update prev image
     if (!state_->trackKeyframeToFrame_)
@@ -1026,11 +1030,11 @@ void VisualFrontend::preprocessImage(cv::Mat &imageRaw)
     // update curr image
     if (state_->claheEnabled_)
     {
-        clahe_->apply(imageRaw, currImage_);
+        clahe_->apply(image, currImage_);
     }
     else
     {
-        currImage_ = imageRaw;
+        currImage_ = image;
     }
 
     // pre-building the pyramid used for KLT speed-up

@@ -22,7 +22,7 @@ class State
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    State(double imgWidth, double imgHeight);
+    State(double imgWidth, double imgHeight, int frameMaxNumKeypoints);
 
     void reset();
 
@@ -45,6 +45,7 @@ public:
     // Image pre-processing
     bool claheEnabled_ = false;
     float claheContrastLimit_ = 3;
+    int claheTileSize_ = 50;
 
     // KLT parameters
     bool kltEnabled_ = true;

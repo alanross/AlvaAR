@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no" name="viewport"/>
+    <meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+    <title>AlvaAR IMU Data</title>
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        *:focus {
+            outline: none !important
+        }
+
+        html,
+        body {
+            font-family: 'Helvetica', sans-serif;
+            width: 100vw;
+            height: 100vh;
+            font-size: 10px;
+            font-weight: 300;
+            background: #eee;
+        }
+
+        #acc,
+        #gyr {
+            width: 100%;
+            height: 180px;
+            background: black;
+            display: block;
+            margin-bottom: 1px;
+        }
+    </style>
+</head>
+<body>
+<canvas id="acc"></canvas>
+<canvas id="gyr"></canvas>
+<div id="three">
+</div>
+<script type="module">
+    import * as THREE from 'https://threejsfundamentals.org/threejs/resources/threejs/r132/build/three.module.js';
+    import { OrbitControls } from 'https://threejsfundamentals.org/threejs/resources/threejs/r132/examples/jsm/controls/OrbitControls.js';
+    import { io } from "https://cdn.socket.io/4.4.1/socket.io.esm.min.js";
+    import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.17/+esm';
+
+    class MadgwickAHRS
+    {
+        // Madgwick's IMU algorithm: http://www.x-io.co.uk/node/8#open_source_ahrs_and_imu_algorithms
+        // Motion data is sampled with 60Hz on iOS Safari
+        constructor( sampleFreq = 60, beta = 0.01 )
+        {
+            // quaternion of sensor frame relative to auxiliary frame
+            this.q0 = 1.0;
+            this.q1 = 0.0;
+            this.q2 = 0.0;
+            this.q3 = 0.0;
+
+            // sample frequency in Hz
+            this.sampleFreq = sampleFreq;
+            this.sampleTime = 0;
+
+            // Rule of thumb: increasing beta leads to faster bias corrections,
+            // higher sensitiveness to lateral accelerations.
+            // 2 * proportional gain (Kp)
+            this.beta = beta;
+        }
+
+        update( time, gx, gy, gz, ax, ay, az )
+        {
+            if( this.sampleTime !== 0 )
+            {
+                const dt = (time - this.sampleTime);
+                this.sampleFreq = 1000.0 / dt;
+            }
+
+            this.sampleTime = time;
+
+            let recipNorm;
+
+            // Rate of change of quaternion from gyroscope
+            let qDot1 = 0.5 * (-this.q1 * gx - this.q2 * gy - this.q3 * gz);
+            let qDot2 = 0.5 * (this.q0 * gx + this.q2 * gz - this.q3 * gy);
+            let qDot3 = 0.5 * (this.q0 * gy - this.q1 * gz + this.q3 * gx);
+            let qDot4 = 0.5 * (this.q0 * gz + this.q1 * gy - this.q2 * gx);
+
+            // Compute feedback only if accelerometer measurement valid (avoids NaN in accelerometer normalisation)
+            if( !((ax === 0.0) && (ay === 0.0) && (az === 0.0)) )
+            {
+                // Normalise accelerometer measurement
+                recipNorm = this.invSqrt( ax * ax + ay * ay + az * az );
+                ax *= recipNorm;
+                ay *= recipNorm;
+                az *= recipNorm;
+
+                // Auxiliary variables to avoid repeated arithmetic
+                const _2q0 = 2.0 * this.q0;
+                const _2q1 = 2.0 * this.q1;
+                const _2q2 = 2.0 * this.q2;
+                const _2q3 = 2.0 * this.q3;
+                const _4q0 = 4.0 * this.q0;
+                const _4q1 = 4.0 * this.q1;
+                const _4q2 = 4.0 * this.q2;
+                const _8q1 = 8.0 * this.q1;
+                const _8q2 = 8.0 * this.q2;
+                const q0q0 = this.q0 * this.q0;
+                const q1q1 = this.q1 * this.q1;
+                const q2q2 = this.q2 * this.q2;
+                const q3q3 = this.q3 * this.q3;
+
+                // Gradient decent algorithm corrective step
+                let s0 = _4q0 * q2q2 + _2q2 * ax + _4q0 * q1q1 - _2q1 * ay;
+                let s1 = _4q1 * q3q3 - _2q3 * ax + 4.0 * q0q0 * this.q1 - _2q0 * ay - _4q1 + _8q1 * q1q1 + _8q1 * q2q2 + _4q1 * az;
+                let s2 = 4.0 * q0q0 * this.q2 + _2q0 * ax + _4q2 * q3q3 - _2q3 * ay - _4q2 + _8q2 * q1q1 + _8q2 * q2q2 + _4q2 * az;
+                let s3 = 4.0 * q1q1 * this.q3 - _2q1 * ax + 4.0 * q2q2 * this.q3 - _2q2 * ay;
+                recipNorm = this.invSqrt( s0 * s0 + s1 * s1 + s2 * s2 + s3 * s3 ); // normalise step magnitude
+                s0 *= recipNorm;
+                s1 *= recipNorm;
+                s2 *= recipNorm;
+                s3 *= recipNorm;
+
+                // Apply feedback step
+                qDot1 -= this.beta * s0;
+                qDot2 -= this.beta * s1;
+                qDot3 -= this.beta * s2;
+                qDot4 -= this.beta * s3;
+            }
+
+            // Integrate rate of change of quaternion to yield quaternion
+            this.q0 += qDot1 * (1.0 / this.sampleFreq);
+            this.q1 += qDot2 * (1.0 / this.sampleFreq);
+            this.q2 += qDot3 * (1.0 / this.sampleFreq);
+            this.q3 += qDot4 * (1.0 / this.sampleFreq);
+
+            // Normalise quaternion
+            recipNorm = this.invSqrt( this.q0 * this.q0 + this.q1 * this.q1 + this.q2 * this.q2 + this.q3 * this.q3 );
+            this.q0 *= recipNorm;
+            this.q1 *= recipNorm;
+            this.q2 *= recipNorm;
+            this.q3 *= recipNorm;
+        }
+
+        invSqrt( val )
+        {
+            return 1 / Math.sqrt( val );
+        }
+    }
+
+    class Filters
+    {
+        static LPF( slidingWindowSize = 10 )
+        {
+            if( slidingWindowSize < 2 ) throw new Error( "Window size must be larger than 2" );
+
+            return (() =>
+            {
+                const values = [];
+
+                return ( value, amount = 0.5 ) =>
+                {
+                    values.push( value );
+
+                    if( values.length > slidingWindowSize ) values.shift();
+
+                    const average = values.reduce( ( a, b ) => a + b ) / values.length;
+
+                    return amount * value + (1 - amount) * average;
+                };
+            })();
+        }
+
+        static HPF( slidingWindowSize = 10 )
+        {
+            if( slidingWindowSize < 2 ) throw new Error( "Window size must be larger than 2" );
+
+            return (() =>
+            {
+                const values = [];
+
+                return ( value, amount = 0.5 ) =>
+                {
+                    values.push( value );
+
+                    if( values.length > slidingWindowSize ) values.shift();
+
+                    const average = values.reduce( ( a, b ) => a + b ) / values.length;
+
+                    return amount * (value - average) + average;
+                };
+            })();
+        }
+    }
+
+    async function main()
+    {
+        const container = document.getElementById( 'three' );
+        const ctxAcc = document.getElementById( "acc" ).getContext( "2d" );
+        const ctxGyr = document.getElementById( "gyr" ).getContext( "2d" );
+
+        const renderer = new THREE.WebGLRenderer( { antialias: true, alpha: true } );
+        renderer.setClearColor( 0, 0 );
+
+        const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+        camera.position.set( 0, 3, 10 );
+
+        const controls = new OrbitControls( camera, renderer.domElement );
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.1;
+        controls.minDistance = 0.1;
+        controls.maxDistance = 1000;
+
+        const objA = new THREE.Mesh( new THREE.BoxGeometry( 1, 0.2, 2, 1, 1, 1 ), new THREE.MeshBasicMaterial( { color: 0xca6507 } ) );
+        objA.position.set( -4, 0, -5 );
+        objA.add( new THREE.AxesHelper( 2 ) );
+
+        const objB = new THREE.Mesh( new THREE.BoxGeometry( 1, 0.2, 2, 1, 1, 1 ), new THREE.MeshBasicMaterial( { color: 0x86ca07 } ) );
+        objB.position.set( 0, 0, -5 );
+        objB.add( new THREE.AxesHelper( 2 ) );
+        objB.rotation.reorder( 'YXZ' );
+
+        const objC = new THREE.Mesh( new THREE.BoxGeometry( 1, 0.2, 2, 1, 1, 1 ), new THREE.MeshBasicMaterial( { color: 0x049ef4 } ) );
+        objC.position.set( 4, 0, -5 );
+        objC.add( new THREE.AxesHelper( 2 ) );
+
+        const box = new THREE.Mesh( new THREE.BoxGeometry( 100, 100, 100, 10, 10, 10 ), new THREE.MeshBasicMaterial( {
+            color: 0x777777,
+            transparent: true,
+            depthTest: true,
+            wireframe: true,
+            opacity: 0.1
+        } ) );
+
+        const scene = new THREE.Scene();
+        scene.add( new THREE.AmbientLight( 0x808080 ) );
+        scene.add( new THREE.HemisphereLight( 0x404040, 0xf0f0f0, 1 ) );
+        scene.add( camera );
+        scene.add( box );
+        scene.add( objA );
+        scene.add( objB );
+        scene.add( objC );
+
+        container.appendChild( renderer.domElement );
+
+        let _graphPos = 0;
+
+        const acc = new THREE.Vector3( 0, 0, 0 );
+        const vel = new THREE.Vector3( 0, 0, 0 );
+        const pos = new THREE.Vector3( 0, 0, 0 );
+
+        const options = {
+            gyr: "-",
+            acc: "-",
+            vel: "-",
+            stationary: '-',
+            accHP: 0.5,
+            accLP: 0.5,
+            accBlend: 0.3,
+            magFilterHP: Filters.HPF( 10 ),
+            magFilterLP: Filters.LPF( 10 ),
+            reset: () =>
+            {
+                acc.set( 0, 0, 0 );
+                vel.set( 0, 0, 0 );
+                pos.set( 0, 0, 0 );
+            }
+        };
+
+        const ahrs = new MadgwickAHRS();
+
+        io().on( 'data', ( data ) =>
+        {
+            if( data.type === 'motion' )
+            {
+                // data format: { time, x, y, z }
+                onMotionData( data );
+            }
+            else if( data.type === 'orientation' )
+            {
+                // data format: { time, gx, gy, gz, ax, ay, az }; g = gyroscope; a = acceleration
+                onOrientationData( data );
+            }
+            else if( data.type === 'vo' )
+            {
+                // data format: { time, qx, qy, qz, qw, tx, ty, tz }
+                onVOData( data );
+            }
+        } );
+
+        const gui = new GUI();
+        gui.add( options, 'accBlend', 0.0, 1.0, 0.01 );
+        gui.add( options, 'accHP', 0.0, 1.0, 0.01 );
+        gui.add( options, 'accLP', 0.0, 1.0, 0.01 );
+        gui.add( options, 'stationary' ).listen().disable();
+        gui.add( options, 'gyr' ).listen().disable();
+        gui.add( options, 'acc' ).listen().disable();
+        gui.add( options, 'vel' ).listen().disable();
+        gui.add( options, 'reset' );
+
+        function onOrientationData( data )
+        {
+            objA.quaternion.setFromEuler( new THREE.Euler( data.x, data.z, -data.y, 'YXZ' ) );
+        }
+
+        function onMotionData( data )
+        {
+            // Integrate the acceleration to compute the velocity and position
+            // velocity = velocity + acceleration * timeStep
+            // position = position + velocity * timeStep
+
+            const Q_X_AXIS = new THREE.Quaternion();
+            Q_X_AXIS.setFromAxisAngle( new THREE.Vector3( 1, 0, 0 ), -Math.PI / 2 );
+
+            ahrs.update( data.time, data.gx, data.gy, data.gz, data.ax, data.ay, data.az );
+            objB.quaternion.copy( Q_X_AXIS );
+            objB.quaternion.multiply( new THREE.Quaternion( -ahrs.q0, -ahrs.q1, -ahrs.q2, ahrs.q3 ) );
+
+            const accMagnitude = Math.sqrt( data.ax * data.ax + data.ay * data.ay + data.az * data.az );
+            const accMagnitudeHp = options.magFilterHP( accMagnitude, options.accHP );
+            const accMagnitudeLp = options.magFilterLP( Math.abs( accMagnitudeHp ), options.accLP );
+            const isStationary = accMagnitudeLp < 0.1;
+
+            const round = ( val ) => Math.round( (val + Number.EPSILON) * 100 ) / 100;
+            const fixed = ( val ) => val.toFixed( 3 );
+
+            const timeStep = 0.1;
+            const alpha = options.accBlend;
+            acc.x = alpha * acc.x + (1.0 - alpha) * round( data.ax );
+            acc.y = alpha * acc.y + (1.0 - alpha) * round( -data.ay );
+            acc.z = alpha * acc.z + (1.0 - alpha) * round( -data.az );
+
+            vel.x = vel.x + acc.x * timeStep;
+            vel.y = vel.y + acc.y * timeStep;
+            vel.z = vel.z + acc.z * timeStep;
+
+            pos.x = pos.x + vel.x * timeStep;
+            pos.y = pos.y + vel.y * timeStep;
+            pos.z = pos.z + vel.z * timeStep;
+
+            objB.position.x = pos.x;
+            objB.position.y = pos.y;
+            objB.position.z = pos.z - 10;
+
+            renderGraph( ctxAcc, data.ax, data.ay, data.az, _graphPos, 3, "bar" );
+            renderGraph( ctxGyr, data.gx, data.gy, data.gz, _graphPos, 3, "dot" );
+
+            options.stationary = isStationary ? 'stationary' : 'moving';
+            options.acc = `${ round( data.ax ) } ${ round( data.ay ) } ${ round( data.az ) }`;
+            options.gyr = `${ round( data.gx ) } ${ round( data.gy ) } ${ round( data.gz ) }`;
+            options.vel = `${ round( vel.x ) } ${ round( vel.y ) } ${ round( vel.z ) }`;
+
+            _graphPos++;
+        }
+
+        function onVOData( data )
+        {
+            const Q_X_AXIS = new THREE.Quaternion();
+            Q_X_AXIS.setFromAxisAngle( new THREE.Vector3( 1, 0, 0 ), Math.PI / 2 );
+
+            objC.quaternion.copy( new THREE.Quaternion( data.qx, data.qy, data.qz, data.qw ) );
+            objC.quaternion.multiply( Q_X_AXIS );
+
+            objC.position.set( data.tx, data.ty, data.tz );
+        }
+
+        function renderGraph( ctx, x, y, z, pos, scale = 1, type = "bar" )
+        {
+            const canvasW = parseInt( ctx.canvas.style.width, 10 );
+            const canvasH = parseInt( ctx.canvas.style.height, 10 );
+
+            const bandH = canvasH / 3;
+            const bandH2 = bandH / 2;
+
+            pos = pos % canvasW;
+
+            x = Math.round( Math.max( -bandH2, Math.min( x * scale, bandH2 ) ) );
+            y = Math.round( Math.max( -bandH2, Math.min( y * scale, bandH2 ) ) );
+            z = Math.round( Math.max( -bandH2, Math.min( z * scale, bandH2 ) ) );
+
+            ctx.fillStyle = "#fff";
+            ctx.fillRect( pos, 0, 2, canvasH );
+            ctx.clearRect( pos, 0, 1, canvasH );
+
+            if( type === "bar" )
+            {
+                ctx.fillStyle = "red";
+                (x >= 0) ? ctx.fillRect( pos, bandH * 0 + bandH2, 1, x + 1 ) : ctx.fillRect( pos, bandH * 0 + bandH2 + x, 1, -x + 1 );
+
+                ctx.fillStyle = "lime";
+                (y >= 0) ? ctx.fillRect( pos, bandH * 1 + bandH2, 1, y + 1 ) : ctx.fillRect( pos, bandH * 1 + bandH2 + y, 1, -y + 1 );
+
+                ctx.fillStyle = "aqua";
+                (z >= 0) ? ctx.fillRect( pos, bandH * 2 + bandH2, 1, z + 1 ) : ctx.fillRect( pos, bandH * 2 + bandH2 + z, 1, -z + 1 );
+            }
+            if( type === "dot" )
+            {
+                ctx.fillStyle = "red";
+                ctx.fillRect( pos, bandH * 0 + bandH2 + x, 1, 1 );
+
+                ctx.fillStyle = "lime";
+                ctx.fillRect( pos, bandH * 1 + bandH2 + y, 1, 1 );
+
+                ctx.fillStyle = "aqua";
+                ctx.fillRect( pos, bandH * 2 + bandH2 + z, 1, 1 );
+            }
+        }
+
+        function renderThree()
+        {
+            requestAnimationFrame( renderThree );
+            controls.update();
+            renderer.render( scene, camera );
+        }
+
+        function onWindowResize()
+        {
+            const f = ( ctx ) =>
+            {
+                ctx.canvas.width = window.innerWidth;
+                ctx.canvas.height = 180;
+
+                if( window.devicePixelRatio > 1 )
+                {
+                    const w = ctx.canvas.width;
+                    const h = ctx.canvas.height;
+
+                    ctx.canvas.width = w * window.devicePixelRatio;
+                    ctx.canvas.height = h * window.devicePixelRatio;
+                    ctx.canvas.style.width = w + "px";
+                    ctx.canvas.style.height = h + "px";
+
+                    ctx.scale( window.devicePixelRatio, window.devicePixelRatio );
+                }
+            }
+
+            f( ctxAcc );
+            f( ctxGyr );
+
+            const ww = window.innerWidth
+            const wh = window.innerHeight - (2 * 180);
+
+            renderer.setSize( ww, wh );
+            renderer.setPixelRatio( window.devicePixelRatio );
+        }
+
+        window.addEventListener( "resize", onWindowResize );
+
+        onWindowResize();
+        renderThree();
+    }
+
+    window.addEventListener( 'load', main );
+</script>
+</body>
+</html>

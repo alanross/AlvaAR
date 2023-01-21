@@ -26,12 +26,6 @@ Frame::Frame(const Frame &frame)
           Frl_(frame.Frl_), Fcv_(frame.Fcv_), covisibleKeyframeIds_(frame.covisibleKeyframeIds_), localMapPointIds_(frame.localMapPointIds_)
 {}
 
-void Frame::updateFrame(const int id, const double timestamp)
-{
-    id_ = id;
-    timestamp_ = timestamp;
-}
-
 std::vector<Keypoint> Frame::getKeypoints() const
 {
     std::vector<Keypoint> v;
