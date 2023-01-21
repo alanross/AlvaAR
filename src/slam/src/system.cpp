@@ -74,6 +74,15 @@ int System::findCameraPoseWithIMU(int imageRGBADataPtr, int imuDataPtr, int pose
         Eigen::Vector3d acc(imuData[i + 4], imuData[i + 5], imuData[i + 6]);
     }
 
+    uint64_t timestamp = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
+    int status = processCameraPose(image, timestamp);
+
+    if( status == 1 )
+    {
+        Twc.translation() = currFrame_->getTwc().translation();
+    }
+
     Utils::toPoseArray(Twc, poseData);
 
     return 1;
