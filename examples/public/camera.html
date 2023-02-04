@@ -46,8 +46,11 @@
             animation: fadeIn 1.2s;
         }
 
-        #container > canvas {
+        canvas {
             display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
         }
 
         #container > video {
@@ -78,6 +81,16 @@
             justify-content: center;
             flex-direction: column;
             background: rgba(0, 0, 0, 0.5);
+        }
+
+        #overlay::before{
+            position: absolute;
+            width: 100%;
+            white-space: pre-wrap;
+            content: "Please allow access \A to your camera.";
+            top:calc(50% + 50px);
+            text-align: center;
+            color: #949494;
         }
 
         #overlay button {
@@ -147,6 +160,9 @@
             audio: false
         }
 
+        const $container = document.getElementById( 'container' );
+        const $view = document.createElement( 'div' );
+        const $canvas = document.createElement( 'canvas' );
         const $overlay = document.getElementById( 'overlay' );
         const $start = document.getElementById( 'start_button' );
         const $splash = document.getElementById( 'splash' );
@@ -158,11 +174,6 @@
         async function demo( media )
         {
             const $video = media.el;
-            const $container = document.getElementById( 'container' );
-            const $view = document.createElement( 'div' );
-            const $canvas = document.createElement( 'canvas' );
-
-            const ctx = $canvas.getContext( '2d', { alpha: false, desynchronized: true } );
 
             const size = resize2cover( $video.videoWidth, $video.videoHeight, $container.clientWidth, $container.clientHeight );
 
@@ -171,6 +182,7 @@
             $video.style.width = size.width + 'px';
             $video.style.height = size.height + 'px';
 
+            const ctx = $canvas.getContext( '2d', { alpha: false, desynchronized: true } );
             const alva = await AlvaAR.Initialize( $canvas.width, $canvas.height );
             const view = new ARCamView( $view, $canvas.width, $canvas.height );
 
