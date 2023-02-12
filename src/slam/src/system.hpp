@@ -50,4 +50,7 @@ private:
     std::unique_ptr<VisualFrontend> visualFrontend_;
     std::shared_ptr<FeatureExtractor> featureExtractor_;
     std::shared_ptr<FeatureTracker> featureTracker_;
+
+    Eigen::Vector3d currTranslation_;
+    Eigen::Vector3d prevTranslation_;
 };

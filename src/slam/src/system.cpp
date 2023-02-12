@@ -46,6 +46,8 @@ void System::reset()
     visualFrontend_->reset();
     mapManager_->reset();
     state_->reset();
+
+    prevTranslation_.setZero();
 }
 
 int System::findCameraPoseWithIMU(int imageRGBADataPtr, int imuDataPtr, int posePtr)
@@ -78,10 +80,19 @@ int System::findCameraPoseWithIMU(int imageRGBADataPtr, int imuDataPtr, int pose
 
     int status = processCameraPose(image, timestamp);
 
-    if( status == 1 )
+    if (status == 1)
     {
-        Twc.translation() = currFrame_->getTwc().translation();
+        Eigen::Vector3d transition = currFrame_->getTwc().translation();
+
+        currTranslation_ = currTranslation_ + transition - prevTranslation_;
+        prevTranslation_ = transition;
     }
+    else
+    {
+        prevTranslation_.setZero();
+    }
+
+    Twc.translation() = currTranslation_;
 
     Utils::toPoseArray(Twc, poseData);
 
