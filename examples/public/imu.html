@@ -83,6 +83,16 @@
             background: rgba(0, 0, 0, 0.5);
         }
 
+        #overlay::before {
+            position: absolute;
+            width: 100%;
+            white-space: pre-wrap;
+            content: "Please allow access to \A your camera and motion sensor.";
+            top: calc(50% + 50px);
+            text-align: center;
+            color: #949494;
+        }
+
         #overlay button {
             background: transparent;
             border: 1px solid rgb(255, 255, 255);
@@ -136,7 +146,7 @@
 <script type="module">
     import { Stats } from "./assets/stats.js";
     import { AlvaAR } from './assets/alva_ar.js';
-    import { ARCamView } from "./assets/view.js";
+    import { ARCamIMUView } from "./assets/view.js";
     import { IMU } from "./assets/imu.js";
     import { Camera, onFrame, resize2cover } from "./assets/utils.js";
 
@@ -175,7 +185,7 @@
 
             const ctx = $canvas.getContext( '2d', { alpha: false, desynchronized: true } );
             const alva = await AlvaAR.Initialize( $canvas.width, $canvas.height );
-            const view = new ARCamView( $view, $canvas.width, $canvas.height );
+            const view = new ARCamIMUView( $view, $canvas.width, $canvas.height );
 
             Stats.add( 'total' );
             Stats.add( 'video' );
@@ -185,9 +195,8 @@
             $container.appendChild( $view );
 
             document.body.appendChild( Stats.el );
-            document.body.addEventListener( "click", () => alva.reset(), false );
-
-            imu.clear();
+            document.body.addEventListener( "click", ( e ) => view.addObjectAt( e.clientX, e.clientY ), false );
+            document.body.addEventListener( "dblclick", ( e ) => alva.reset(), false );
 
             onFrame( () =>
             {

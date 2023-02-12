@@ -65,6 +65,101 @@ class ARCamView
     }
 }
 
+class ARCamIMUView
+{
+    constructor( container, width, height )
+    {
+        this.applyPose = AlvaARConnectorTHREE.Initialize( THREE );
+
+        this.renderer = new THREE.WebGLRenderer( { antialias: true, alpha: true } );
+        this.renderer.setClearColor( 0, 0 );
+        this.renderer.setSize( width, height );
+        this.renderer.setPixelRatio( window.devicePixelRatio );
+
+        this.camera = new THREE.PerspectiveCamera( 60, width / height, 0.01, 1000 );
+
+        this.raycaster = new THREE.Raycaster();
+
+        this.ground = new THREE.Mesh(
+            new THREE.CircleGeometry( 1000, 64 ),
+            new THREE.MeshBasicMaterial( {
+                color: 0xffffff,
+                transparent: true,
+                depthTest: true,
+                opacity: 0.1,
+                side: THREE.DoubleSide
+            } )
+        );
+
+        this.ground.rotation.x = Math.PI / 2; // 90 deg
+        this.ground.position.y = -2;
+
+        this.scene = new THREE.Scene();
+        this.scene.add( new THREE.AmbientLight( 0x808080 ) );
+        this.scene.add( new THREE.HemisphereLight( 0x404040, 0xf0f0f0, 1 ) );
+        this.scene.add( this.ground );
+        this.scene.add( this.camera );
+
+        container.appendChild( this.renderer.domElement );
+
+        const render = () =>
+        {
+            requestAnimationFrame( render.bind( this ) );
+
+            this.renderer.render( this.scene, this.camera );
+        }
+
+        render();
+    }
+
+    updateCameraPose( pose )
+    {
+        this.applyPose( pose, this.camera.quaternion, this.camera.position );
+
+        this.ground.position.x = this.camera.position.x;
+        this.ground.position.z = this.camera.position.z;
+
+        this.scene.children.forEach( obj => obj.visible = true );
+    }
+
+    lostCamera()
+    {
+        this.scene.children.forEach( obj => obj.visible = false );
+    }
+
+    addObjectAt( x, y, scale = 0.1 )
+    {
+        const el = this.renderer.domElement;
+
+        const coord = new THREE.Vector2( (x / el.offsetWidth) * 2 - 1, -(y / el.offsetHeight) * 2 + 1 );
+
+        this.raycaster.setFromCamera( coord, this.camera );
+
+        const intersections = this.raycaster.intersectObjects( [this.ground] );
+
+        if( intersections.length > 0 )
+        {
+            const point = intersections[0].point;
+
+            const object = new THREE.Mesh(
+                new THREE.IcosahedronGeometry( 1, 0 ),
+                new THREE.MeshNormalMaterial( { flatShading: true } )
+            );
+
+            object.scale.set( scale, scale, scale );
+            object.position.set( point.x, point.y, point.z );
+            object.custom = true;
+
+            this.scene.add( object );
+        }
+    }
+
+    reset()
+    {
+        this.scene.children.filter( o => o.custom ).forEach( o => this.scene.remove( o ) );
+    }
+}
+
 class ARSimpleView
 {
     constructor( container, width, height, mapView = null )
@@ -178,4 +273,4 @@ class ARSimpleMap
     }
 }
 
-export { ARCamView, ARSimpleView, ARSimpleMap }
+export { ARCamView, ARCamIMUView, ARSimpleView, ARSimpleMap }
