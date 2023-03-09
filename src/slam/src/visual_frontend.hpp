@@ -87,18 +87,16 @@ private:
 
     void preprocessImage(cv::Mat &image);
 
-    // KLT Tracking with motion prior
-    void kltTracking();
+    void kltTrackingFromMotionPrior();
 
     void kltTrackingFromKeyframe();
 
-    // apply a 2d-2d based outliers filtering
-    void epipolar2d2dFiltering();
+    void epipolar2d2dOutlierFiltering();
 
     bool computePose();
 
-    // compute parallax (in px.) between current frame and the provided keyframe.
-    float computeParallax(const int keyframeId, bool doUnRotate = true, bool doMedian = true, bool doOnly2d = false);
+    // compute parallax (in px.) between current frame and the provided keyframe
+    float computeParallax(const int keyframeId, bool doUnRotate, bool doMedian);
 
     bool checkReadyForInit();
 
