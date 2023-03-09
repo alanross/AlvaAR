@@ -90,7 +90,15 @@ bool VisualFrontend::process(cv::Mat &image, double timestamp)
 
         if (!success)
         {
-            std::cout << "- [Visual-Front-End]: Failed to compute pose\n";
+            std::cout << "- [Visual-Front-End]: Failed to compute pose num times: " << poseFailedCounter_ << std::endl;
+
+            poseFailedCounter_++;
+
+            if (poseFailedCounter_ > 3)
+            {
+                state_->slamResetRequested_ = true;
+                return false;
+            }
         }
 
         motionModel_.updateMotionModel(currFrame_->Twc_, timestamp);
@@ -467,15 +475,6 @@ void VisualFrontend::epipolar2d2dOutlierFiltering()
         // Compute parallax
         avgParallax += cv::norm(rotPx - keyframeKeypoint.unpx_);
         numParallax++;
-    }
-
-    if (numKeypoints < 8)
-    {
-        if (state_->debug_)
-        {
-            std::cout << "- [Visual-Front-End]: Not enough kps to compute Essential Matrix\n";
-        }
-        return;
     }
 
     // Average parallax
@@ -1045,4 +1044,6 @@ void VisualFrontend::reset()
     currPyramid_.clear();
     prevPyramid_.clear();
     keyframePyramid_.clear();
+
+    poseFailedCounter_ = 0;
 }

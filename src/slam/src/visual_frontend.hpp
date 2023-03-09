@@ -120,4 +120,5 @@ private:
     MotionModel motionModel_;
 
     bool p3pReq_ = false;
+    int poseFailedCounter_ = 0;
 };
