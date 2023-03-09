@@ -752,122 +752,120 @@ bool VisualFrontend::checkReadyForInit()
 {
     double avgComputedRotParallax = computeParallax(currFrame_->keyframeId_, false, true);
 
-    if (avgComputedRotParallax > state_->minAvgRotationParallax_)
+    if (avgComputedRotParallax <= state_->minAvgRotationParallax_)
     {
-        auto prevKeyframe = mapManager_->mapKeyframes_.at(currFrame_->keyframeId_);
-
-        if (prevKeyframe == nullptr)
-        {
-            return false;
-        }
-
-        size_t numKeypoints = currFrame_->numKeypoints_;
-
-        if (numKeypoints < 8)
-        {
-            std::cout << "- [Visual-Front-End]: Can't compute 5-pt Essential matrix. Not enough keypoints.\n";
-            return false;
-        }
-
-        // Setup Essential Matrix computation for OpenGV-based filtering
-        std::vector<int> keypointIds;
-        std::vector<int> outliersIndices;
-        std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > vkfbvs;
-        std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > vcurbvs;
-
-        keypointIds.reserve(numKeypoints);
-        outliersIndices.reserve(numKeypoints);
-        vkfbvs.reserve(numKeypoints);
-        vcurbvs.reserve(numKeypoints);
-
-        Eigen::Matrix3d Rkfcur = prevKeyframe->getTcw().rotationMatrix() * currFrame_->getTwc().rotationMatrix();
-        int numParallax = 0;
-        float avgRotParallax = 0.;
-
-        // Get bvs and compute the rotation compensated parallax for all current keypoints
-        for (const auto &it: currFrame_->mapKeypoints_)
-        {
-            auto &keypoint = it.second;
-
-            // get the prev keyframe related kp if it exists
-            auto keyframeKeypoint = prevKeyframe->getKeypointById(keypoint.keypointId_);
-
-            if (keyframeKeypoint.keypointId_ != keypoint.keypointId_)
-            {
-                continue;
-            }
-
-            // Store the bvs and their ids
-            vkfbvs.push_back(keyframeKeypoint.bv_);
-            vcurbvs.push_back(keypoint.bv_);
-            keypointIds.push_back(keypoint.keypointId_);
-
-            // compute rotation compensated parallax
-            Eigen::Vector3d rotBv = Rkfcur * keypoint.bv_;
-            Eigen::Vector3d unpx = currFrame_->cameraCalibration_->K_ * rotBv;
-            cv::Point2f rotpx(unpx.x() / unpx.z(), unpx.y() / unpx.z());
-
-            avgRotParallax += cv::norm(rotpx - keyframeKeypoint.unpx_);
-            numParallax++;
-        }
-
-        if (numParallax < 8)
-        {
-            std::cout << "- [Visual-Front-End]: Can't compute 5-pt Essential matrix. Not enough prev keyframe keypoints.\n";
-            return false;
-        }
-
-        // average parallax
-        avgRotParallax /= float(numParallax);
-
-        std::cout << "- [Visual-Front-End]: numParallax: " << numParallax << " Avg_rot_parallax:" << avgRotParallax << std::endl;
-
-        if (avgRotParallax < state_->minAvgRotationParallax_)
-        {
-            std::cout << "- [Visual-Front-End]: Can't compute 5-pt Essential matrix. Not enough parallax (\" << avgRotParallax << \" px)\n";
-            return false;
-        }
-
-        Eigen::Matrix3d Rkfc;
-        Eigen::Vector3d tkfc;
-        Rkfc.setIdentity();
-        tkfc.setZero();
-
-        bool success = MultiViewGeometry::compute5ptEssentialMatrix(
-                vkfbvs,
-                vcurbvs,
-                state_->multiViewRansacNumIterations_,
-                state_->multiViewRansacError_,
-                true, // optimize
-                state_->multiViewRandomEnabled_,
-                currFrame_->cameraCalibration_->fx_,
-                currFrame_->cameraCalibration_->fy_,
-                Rkfc,
-                tkfc,
-                outliersIndices);
-
-        if (!success)
-        {
-            std::cout << "- [Visual-Front-End]: 5-pt Essential Matrix failed.\n";
-            return false;
-        }
-
-        // Remove outliers from current frame
-        for (const auto &idx: outliersIndices)
-        {
-            mapManager_->removeObsFromCurrFrameById(keypointIds.at(idx));
-        }
-
-        // arbitrary scale
-        tkfc.normalize();
-        tkfc = tkfc.eval() * 0.25;
-
-        currFrame_->setTwc(Rkfc, tkfc);
-
-        return true;
+        return false;
     }
 
-    return false;
+    auto prevKeyframe = mapManager_->mapKeyframes_.at(currFrame_->keyframeId_);
+
+    if (prevKeyframe == nullptr)
+    {
+        return false;
+    }
+
+    size_t numKeypoints = currFrame_->numKeypoints_;
+
+    if (numKeypoints < 8)
+    {
+        std::cout << "- [Visual-Front-End]: Can't compute 5-pt Essential matrix. Not enough keypoints.\n";
+        return false;
+    }
+
+    // Setup Essential Matrix computation for OpenGV-based filtering
+    std::vector<int> keypointIds;
+    std::vector<int> outliersIndices;
+    std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > vkfbvs;
+    std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > vcurbvs;
+
+    keypointIds.reserve(numKeypoints);
+    outliersIndices.reserve(numKeypoints);
+    vkfbvs.reserve(numKeypoints);
+    vcurbvs.reserve(numKeypoints);
+
+    Eigen::Matrix3d RCurrKeyframe = prevKeyframe->getTcw().rotationMatrix() * currFrame_->getTwc().rotationMatrix();
+    int numParallax = 0;
+    float avgRotParallax = 0.;
+
+    // Get bvs and compute the rotation compensated parallax for all current keypoints
+    for (const auto &it: currFrame_->mapKeypoints_)
+    {
+        auto &keypoint = it.second;
+
+        // get the prev keyframe related kp if it exists
+        auto keyframeKeypoint = prevKeyframe->getKeypointById(keypoint.keypointId_);
+
+        if (keyframeKeypoint.keypointId_ != keypoint.keypointId_)
+        {
+            continue;
+        }
+
+        // Store the bvs and their ids
+        vkfbvs.push_back(keyframeKeypoint.bv_);
+        vcurbvs.push_back(keypoint.bv_);
+        keypointIds.push_back(keypoint.keypointId_);
+
+        // compute rotation compensated parallax
+        Eigen::Vector3d rotBv = RCurrKeyframe * keypoint.bv_;
+        Eigen::Vector3d unpx = currFrame_->cameraCalibration_->K_ * rotBv;
+        cv::Point2f rotpx(unpx.x() / unpx.z(), unpx.y() / unpx.z());
+
+        avgRotParallax += cv::norm(rotpx - keyframeKeypoint.unpx_);
+        numParallax++;
+    }
+
+    if (numParallax < 8)
+    {
+        std::cout << "- [Visual-Front-End]: Can't compute 5-pt Essential matrix. Not enough prev keyframe keypoints.\n";
+        return false;
+    }
+
+    // average parallax
+    avgRotParallax /= float(numParallax);
+
+    if (avgRotParallax < state_->minAvgRotationParallax_)
+    {
+        std::cout << "- [Visual-Front-End]: Can't compute 5-pt Essential matrix. Not enough parallax (\" << avgRotParallax << \" px)\n";
+        return false;
+    }
+
+    Eigen::Matrix3d Rkfc;
+    Eigen::Vector3d tkfc;
+    Rkfc.setIdentity();
+    tkfc.setZero();
+
+    bool success = MultiViewGeometry::compute5ptEssentialMatrix(
+            vkfbvs,
+            vcurbvs,
+            state_->multiViewRansacNumIterations_,
+            state_->multiViewRansacError_,
+            true, // optimize
+            state_->multiViewRandomEnabled_,
+            currFrame_->cameraCalibration_->fx_,
+            currFrame_->cameraCalibration_->fy_,
+            Rkfc,
+            tkfc,
+            outliersIndices);
+
+    if (!success)
+    {
+        std::cout << "- [Visual-Front-End]: 5-pt Essential Matrix failed.\n";
+        return false;
+    }
+
+    // Remove outliers from current frame
+    for (const auto &idx: outliersIndices)
+    {
+        mapManager_->removeObsFromCurrFrameById(keypointIds.at(idx));
+    }
+
+    // arbitrary scale
+    tkfc.normalize();
+    tkfc = tkfc.eval() * 0.25;
+
+    currFrame_->setTwc(Rkfc, tkfc);
+
+    return true;
 }
 
 bool VisualFrontend::checkNewKeyframeRequired()
@@ -885,19 +883,19 @@ bool VisualFrontend::checkNewKeyframeRequired()
     // Compute median parallax unrot : false / median : true
     double medianRotParallax = computeParallax(keyframe->keyframeId_, true, true);
 
-    int diffBetweenKeyframes = currFrame_->id_ - keyframe->id_;
+    int idDiff = currFrame_->id_ - keyframe->id_;
 
-    if (diffBetweenKeyframes >= 5 && currFrame_->numOccupiedCells_ < 0.33 * state_->frameMaxNumKeypoints_)
+    if (idDiff >= 5 && currFrame_->numOccupiedCells_ < 0.33 * state_->frameMaxNumKeypoints_)
     {
         return true;
     }
 
-    if (diffBetweenKeyframes >= 2 && currFrame_->numKeypoints3d_ < 20)
+    if (idDiff >= 2 && currFrame_->numKeypoints3d_ < 20)
     {
         return true;
     }
 
-    if (diffBetweenKeyframes < 2 && currFrame_->numKeypoints3d_ > 0.5 * state_->frameMaxNumKeypoints_)
+    if (idDiff < 2 && currFrame_->numKeypoints3d_ > 0.5 * state_->frameMaxNumKeypoints_)
     {
         return false;
     }
@@ -919,11 +917,6 @@ float VisualFrontend::computeParallax(const int keyframeId, bool doUnRotate, boo
 
     if (keyframeIt == mapManager_->mapKeyframes_.end())
     {
-        if (state_->debug_)
-        {
-            std::cout << "- [Visual-Front-End]: Error in computeParallax ! Prev keyframe #" << keyframeId << " does not exist!\n";
-        }
-
         return 0.;
     }
 
