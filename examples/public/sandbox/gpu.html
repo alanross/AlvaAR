@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no" name="viewport"/>
+    <meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+    <title>WebGL Harris1</title>
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body, html {
+            font-family: 'Helvetica', sans-serif;
+            font-size: 11px;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .container div {
+            width: 300px;
+            height: 450px;
+            position: relative;
+            outline: 1px solid #eee;
+        }
+
+        .container div::after {
+            position: absolute;
+            display: block;
+            bottom: 0;
+            left: 0;
+            padding: 5px;
+            background: rgba(0, 0, 0, 0.4);
+            color: #fff;
+            content: attr(data-title);
+        }
+
+        .container canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .container img,
+        .container video {
+            object-fit: cover;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div data-title="Source Image">
+        <img id="image" src="../assets/image.jpg" alt="image">
+    </div>
+    <div data-title="Source Video">
+        <video id="video" src="../assets/video.mp4" muted playsinline></video>
+    </div>
+    <div data-title="Canvas WebGL">
+        <canvas id="canvas3d"></canvas>
+    </div>
+    <div data-title="Canvas 2D Keypoints">
+        <canvas id="canvas2d"></canvas>
+    </div>
+</div>
+<script type="module">
+    import { WebGL2 } from "../assets/webgl.js";
+    import { Stats } from "../assets/stats.js";
+
+    const FRAG_SOURCE_BLUR = `#version 300 es
+        precision mediump float;
+
+        #define PIXEL_AT(_x, _y) (texture(u_image, v_texCoord + onePixel * vec2(_x, _y)))
+
+        uniform sampler2D u_image;
+        uniform vec2 u_dimensions;
+        uniform float u_radius;
+
+        in vec2 v_texCoord;
+        out vec4 out_color;
+
+        float PI = 3.141592653589793238;
+
+        float gaussian(float x, float sigma)
+        {
+            return (1.0 / sqrt(2.0 * PI * sigma * sigma)) * exp(-(x * x) / (2.0 * sigma * sigma));
+        }
+
+        void main()
+        {
+            vec2 onePixel = vec2(1.0, 1.0) / u_dimensions;
+            vec4 color = vec4(0.0);
+
+            float sigma = u_radius / 3.0;
+            int radius = int(u_radius);
+            float weightSum = 0.0;
+
+            for (int x = -radius; x <= radius; ++x)
+            {
+                for (int y = -radius; y <= radius; ++y)
+                {
+                    float weight = gaussian(float(x), sigma) * gaussian(float(y), sigma);
+                    color += PIXEL_AT(x, y) * weight;
+                    weightSum += weight;
+                }
+            }
+
+            out_color = color / weightSum;
+        }`;
+
+    const FRAG_SOURCE_GREY = `#version 300 es
+        precision mediump float;
+
+        uniform sampler2D u_image;
+        uniform vec2 u_dimensions;
+
+        in vec2 v_texCoord;
+        out vec4 out_color;
+
+        void main()
+        {
+            vec4 color = texture(u_image, v_texCoord);
+
+            float luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
+
+            out_color = vec4(vec3(luminance), color.a);
+        }`;
+
+    const FRAG_SOURCE_SOBEL = `#version 300 es
+        precision mediump float;
+
+        #define PIXEL_AT(_x, _y) (texture(u_image, v_texCoord + onePixel * vec2(_x, _y)))
+
+        uniform sampler2D u_image;
+        uniform vec2 u_dimensions;
+
+        in vec2 v_texCoord;
+        out vec4 out_color;
+
+        void main()
+        {
+            vec2 onePixel = vec2(1.0, 1.0) / u_dimensions;
+
+            vec4 p11 = PIXEL_AT(-1,-1); vec4 p12 = PIXEL_AT( 0,-1); vec4 p13 = PIXEL_AT( 1,-1);
+            vec4 p21 = PIXEL_AT(-1, 0); vec4 p22 = PIXEL_AT( 0, 0); vec4 p23 = PIXEL_AT( 1, 0);
+            vec4 p31 = PIXEL_AT(-1, 1); vec4 p32 = PIXEL_AT( 0, 1); vec4 p33 = PIXEL_AT( 1, 1);
+
+            // https://en.wikipedia.org/wiki/Sobel_operator
+            //        |+1  0 -1|        |+1 +2 +1|
+            //  hor = |+2  0 -2|   ver =| 0  0  0|
+            //        |+1  0 -1|        |-1 -2 -1|
+            float hor = ( p11.r * 1.0 + p12.r * 2.0 + p13.r * 1.0 ) + ( p31.r * -1.0 + p32.r * -2.0 + p33.r * -1.0 );
+            float ver = ( p11.r * 1.0 + p21.r * 2.0 + p31.r * 1.0 ) + ( p13.r * -1.0 + p23.r * -2.0 + p33.r * -1.0 );
+
+            //    // map gradients to [0, 1] range
+            //    hor = (hor + 4.0) / 8.0;
+            //    ver = (ver + 4.0) / 8.0;
+
+            // Compute elements of the Harris matrix
+            float Ixx = hor * hor;
+            float Iyy = ver * ver;
+            float Ixy = hor * ver;
+
+            out_color = vec4( Ixx, Iyy, Ixy, 1 );
+        }`;
+
+    const FRAG_SOURCE_HARRIS = `#version 300 es
+        precision mediump float;
+
+        #define PIXEL_AT(_x, _y) (texture(u_image, v_texCoord + onePixel * vec2(_x, _y)))
+
+        uniform sampler2D u_image;
+        uniform vec2 u_dimensions;
+        uniform float u_threshold;
+        uniform float u_k;
+
+        in vec2 v_texCoord;
+        out vec4 out_color;
+
+        float Harris(float Ixx, float Iyy, float Ixy, float k, float threshold)
+        {
+            // Trace of 2×2 matrix
+            float trace = Ixx + Iyy;
+
+            // Calculation of 2×2 matrix determinant
+            float det = (Ixx * Iyy) - (Ixy * Ixy);
+
+            float R = det - k * trace * trace;
+
+            return (R >= threshold) ? R : 0.0;
+        }
+        
+        float ShiTomasi(float Ixx, float Iyy, float Ixy, float k, float threshold)
+        {
+            float trace = Ixx + Iyy;
+            float det = (Ixx * Iyy) - (Ixy * Ixy);
+
+            float sq = sqrt(trace * trace / 4.0 - det);
+
+            float n1 = trace * 0.5 + sq;
+            float n2 = trace * 0.5 - sq;
+
+            float R = min( n1, n2 );
+
+            return (R >= threshold) ? R : 0.0;
+        }
+
+        void main()
+        {
+            vec2 onePixel = vec2(1.0, 1.0) / u_dimensions;
+
+            vec4 p = (
+                    PIXEL_AT(-1, -1) + PIXEL_AT(0, -1) + PIXEL_AT(1, -1) +
+                    PIXEL_AT(-1,  0) + PIXEL_AT(0,  0) + PIXEL_AT(1,  0) +
+                    PIXEL_AT(-1,  1) + PIXEL_AT(0,  1) + PIXEL_AT(1,  1)
+                ) / 9.0;
+
+            float R = ShiTomasi(p.x, p.y, p.z, u_k, u_threshold);
+
+            out_color = vec4(R, R, R, 1);
+        }`;
+
+    const FRAG_SOURCE_NONMAX = `#version 300 es
+    precision mediump float;
+
+    #define PIXEL_AT(_x, _y) (texture(u_image, v_texCoord + onePixel * vec2(_x, _y)))
+
+    uniform sampler2D u_image;
+    uniform vec2 u_dimensions;
+    uniform float u_radius;
+    uniform float u_threshold;
+
+    in vec2 v_texCoord;
+    out vec4 out_color;
+
+    void main()
+    {
+        vec2 onePixel = vec2(1.0, 1.0) / u_dimensions;
+        float v = texture(u_image, v_texCoord).r;
+
+        int radius = int(u_radius);
+        bool found = false;
+
+        // Check for neighbors with larger values
+        for (int i = -radius; i <= radius && !found; i++)
+        {
+            for (int j = -radius; j <= radius && !found; j++)
+            {
+                // Skip the current pixel
+                if (i == 0 && j == 0) continue;
+
+                float neighborValue = PIXEL_AT(i, j).r;
+
+                // Found neighbor with larger or equal value
+                if (v <= neighborValue && abs(v - neighborValue) > u_threshold)
+                {
+                    found = true;
+                    v = 0.0;
+                }
+            }
+        }
+
+        out_color = vec4(v, v, v, 1);
+    }`;
+
+    const FRAG_SOURCE_DEFAULT = `#version 300 es
+        precision mediump float;
+
+        uniform sampler2D u_image;
+        uniform vec2 u_dimensions;
+
+        in vec2 v_texCoord;
+        out vec4 out_color;
+
+        void main()
+        {
+            out_color = texture(u_image, v_texCoord);
+        }`;
+
+    const VERT_SOURCE_DEFAULT = `#version 300 es
+        in vec2 a_position;
+        in vec2 a_texCoord;
+
+        out vec2 v_texCoord;
+
+        void main()
+        {
+            gl_Position = vec4(a_position, 0.0, 1.0);
+            //v_texCoord = vec2(a_texCoord.x, 1.0 - a_texCoord.y); //used in the fragment shader as current texture coordinate. Flip Y
+            v_texCoord = vec2(a_texCoord.x, a_texCoord.y);
+        }`;
+
+    class PreProcessor
+    {
+        constructor( canvas )
+        {
+            const gl = canvas.getContext( 'webgl2' );
+
+            if( !gl )
+            {
+                throw new Error( 'WebGL 2.0 is not supported on this machine.' );
+            }
+
+            // extension enables writing float textures to a frame buffer if not enabled out of the box
+            if( !gl.getExtension( 'EXT_color_buffer_float' ) )
+            {
+                throw new Error( 'Floating point textures not supported on this machine.' );
+            }
+
+            gl.disable( gl.DEPTH_TEST );
+            gl.disable( gl.STENCIL_TEST );
+            gl.disable( gl.BLEND );
+            gl.disable( gl.DITHER );
+            gl.enableVertexAttribArray( 0 );
+
+            gl.compileProgram = function( vertShaderSource, fragShaderSource, uniforms, attributes )
+            {
+                const program = WebGL2.createProgram( gl, vertShaderSource, fragShaderSource );
+
+                uniforms = Object.assign( {
+                    dimLocation: 'u_dimensions',
+                    imgLocation: 'u_image'
+                }, uniforms );
+
+                attributes = Object.assign( {
+                    posLocation: 'a_position',
+                    texLocation: 'a_texCoord'
+                }, attributes );
+
+                for( const k of Object.keys( uniforms ) )
+                {
+                    program[k] = gl.getUniformLocation( program, uniforms[k] );
+                }
+
+                for( const k of Object.keys( attributes ) )
+                {
+                    program[k] = gl.getAttribLocation( program, attributes[k] );
+                    gl.enableVertexAttribArray( program[k] );
+                }
+
+                return program;
+            };
+
+            gl.runProgram = function( program, srcTexture, dstFrameBuffer, xScale = 1, yScale = 1 )
+            {
+                gl.bindFramebuffer( gl.FRAMEBUFFER, dstFrameBuffer );
+                gl.useProgram( program );
+
+                gl.viewport( 0, 0, gl.canvas.width, gl.canvas.height );
+                gl.clearColor( 0, 0, 0, 1 );
+                gl.clear( gl.COLOR_BUFFER_BIT );
+
+                const positions = [-xScale, -yScale, xScale, -yScale, -xScale, yScale, xScale, yScale];
+                gl.bindBuffer( gl.ARRAY_BUFFER, gl.createBuffer() );
+                gl.bufferData( gl.ARRAY_BUFFER, new Float32Array( positions ), gl.STATIC_DRAW );
+                gl.vertexAttribPointer( program.posLocation, 2, gl.FLOAT, false, 0, 0 );
+
+                const texCoords = [0, 0, 1, 0, 0, 1, 1, 1];
+                gl.bindBuffer( gl.ARRAY_BUFFER, gl.createBuffer() );
+                gl.bufferData( gl.ARRAY_BUFFER, new Float32Array( texCoords ), gl.STATIC_DRAW );
+                gl.vertexAttribPointer( program.texLocation, 2, gl.FLOAT, false, 0, 0 );
+
+                gl.uniform2f( program.dimLocation, gl.canvas.width, gl.canvas.height );
+
+                gl.activeTexture( gl.TEXTURE0 );
+                gl.bindTexture( gl.TEXTURE_2D, srcTexture );
+                gl.uniform1i( program.imgLocation, 0 );
+
+                gl.drawArrays( gl.TRIANGLE_STRIP, 0, 4 );
+            };
+
+            this.programSelf = gl.compileProgram( VERT_SOURCE_DEFAULT, FRAG_SOURCE_DEFAULT );
+            this.programGrey = gl.compileProgram( VERT_SOURCE_DEFAULT, FRAG_SOURCE_GREY );
+            this.programBlur = gl.compileProgram( VERT_SOURCE_DEFAULT, FRAG_SOURCE_BLUR, { radiusLocation: 'u_radius' } );
+            this.programSobel = gl.compileProgram( VERT_SOURCE_DEFAULT, FRAG_SOURCE_SOBEL );
+            this.programHarris = gl.compileProgram( VERT_SOURCE_DEFAULT, FRAG_SOURCE_HARRIS, { thresholdLocation: 'u_threshold', kLocation: 'u_k' } );
+            this.programNonmax = gl.compileProgram( VERT_SOURCE_DEFAULT, FRAG_SOURCE_NONMAX, { thresholdLocation: 'u_threshold', radiusLocation: 'u_radius' } );
+
+            this.texture = WebGL2.createTexture( gl, gl.canvas.width, gl.canvas.height, gl.UNSIGNED_BYTE );
+
+            this.ping = WebGL2.createFrameBuffer( gl, gl.canvas.width, gl.canvas.height, gl.FLOAT );
+            this.pong = WebGL2.createFrameBuffer( gl, gl.canvas.width, gl.canvas.height, gl.FLOAT );
+
+            this.rgba = new Uint8ClampedArray( gl.canvas.width * gl.canvas.height * 4 );
+
+            this.gl = gl;
+        }
+
+        process( imageOrVideo )
+        {
+            const gl = this.gl;
+
+            const sourceWidth = imageOrVideo.naturalWidth || imageOrVideo.videoWidth || imageOrVideo.width;
+            const sourceHeight = imageOrVideo.naturalHeight || imageOrVideo.videoHeight || imageOrVideo.height;
+
+            const canvasAspectRatio = gl.canvas.width / gl.canvas.height;
+            const sourceAspectRatio = sourceWidth / sourceHeight;
+
+            let xScale = 1.0;
+            let yScale = 1.0;
+
+            if( canvasAspectRatio > sourceAspectRatio )
+            {
+                yScale = canvasAspectRatio / sourceAspectRatio;
+            }
+            else
+            {
+                xScale = sourceAspectRatio / canvasAspectRatio;
+            }
+
+            // upload image to GPU
+            gl.bindTexture( gl.TEXTURE_2D, this.texture );
+            gl.texImage2D( gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, imageOrVideo );
+
+            // compute image scale
+            gl.runProgram( this.programSelf, this.texture, this.ping.fbo, xScale, yScale );
+
+            // compute greyscale
+            gl.runProgram( this.programGrey, this.ping.tex, this.pong.fbo );
+
+            // compute image blur
+            gl.useProgram( this.programBlur );
+            gl.uniform1f( this.programBlur.radiusLocation, 3.0 );
+            gl.runProgram( this.programBlur, this.pong.tex, this.ping.fbo );
+
+            // compute Sobel gradients
+            gl.runProgram( this.programSobel, this.ping.tex, this.pong.fbo );
+
+            // compute Sobel blur
+            gl.useProgram( this.programBlur );
+            gl.uniform1f( this.programBlur.radiusLocation, 1.0 );
+            gl.runProgram( this.programBlur, this.pong.tex, this.ping.fbo );
+
+            // compute Harris response
+            gl.useProgram( this.programHarris );
+            gl.uniform1f( this.programHarris.kLocation, 0.04 );
+            gl.uniform1f( this.programHarris.thresholdLocation, 0.01 );
+            gl.runProgram( this.programHarris, this.ping.tex, this.pong.fbo );
+
+            // compute non-maximum suppression
+            gl.useProgram( this.programNonmax );
+            gl.uniform1f( this.programNonmax.radiusLocation, 3 );
+            gl.uniform1f( this.programNonmax.thresholdLocation, 0.001 );
+            gl.runProgram( this.programNonmax, this.pong.tex, this.ping.fbo );
+
+            // render processed image
+            gl.runProgram( this.programSelf, this.ping.tex, null );
+
+            // grab processed image pixels
+            gl.readPixels( 0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, this.rgba );
+
+            return this.rgba;
+        }
+
+        getKeypoints( rgba, width, height, border = 8 )
+        {
+            const minX = border;
+            const maxX = width - border;
+            const minY = border;
+            const maxY = height - border;
+
+            const keypoints = [];
+
+            for( let i = 0, j = 0; i < rgba.length; i += 4 )
+            {
+                const response = rgba[i]; // red channel contains corner data
+
+                if( response > 0 )
+                {
+                    const x = j % width;
+                    const y = ~~(j / width);
+
+                    if( x > minX && y > minY && x < maxX && y < maxY )
+                    {
+                        keypoints.push( { x: x, y: height - y, response: response } );
+                    }
+                }
+
+                j++;
+            }
+
+            return keypoints;
+        }
+    }
+
+    function main()
+    {
+        const video = document.getElementById( 'video' );
+        const image = document.getElementById( 'image' );
+        const canvas2d = document.getElementById( 'canvas2d' );
+        const canvas3d = document.getElementById( 'canvas3d' );
+
+        video.load();
+        video.play();
+        video.addEventListener( 'ended', () =>
+        {
+            video.load();
+            video.play();
+        } );
+
+        const ctx = canvas2d.getContext( '2d' );
+        const rect = canvas3d.getBoundingClientRect();
+        const bmd = new ImageData( rect.width, rect.height );
+        const clear = new Uint8ClampedArray( rect.width * rect.height * 4 );
+
+        Stats.add( 'gpu' );
+        Stats.add( 'cpu' );
+
+        clear.fill( 0 );
+
+        canvas2d.width = canvas3d.width = rect.width;
+        canvas2d.height = canvas3d.height = rect.height;
+        canvas2d.style.width = canvas3d.style.width = rect.width + 'px';
+        canvas2d.style.height = canvas3d.style.height = rect.height + 'px';
+
+        let media = video;
+
+        const gpu = new PreProcessor( canvas3d );
+
+        document.body.appendChild( Stats.el );
+        document.body.addEventListener( "click", () => media = (media === video ? image : video), false );
+
+        (function render()
+        {
+            requestAnimationFrame( render );
+
+            if( video.readyState >= 4 )
+            {
+                Stats.next();
+
+                Stats.start( 'gpu' );
+                const rgba = gpu.process( media );
+                Stats.stop( 'gpu' );
+
+                Stats.start( 'cpu' );
+                const keypoints = gpu.getKeypoints( rgba, canvas3d.width, canvas3d.height );
+                Stats.stop( 'cpu' );
+
+                bmd.data.set( clear );
+
+                const color = 0xFFFF00FF;
+                const pixels = new Uint32Array( bmd.data.buffer );
+                const width = bmd.width;
+
+                for( const keypoint of keypoints )
+                {
+                    const index = (keypoint.x + keypoint.y * width);
+
+                    pixels[index] = color;
+                    pixels[index - 1] = color;
+                    pixels[index + 1] = color;
+                    pixels[index - width] = color;
+                    pixels[index + width] = color;
+                }
+
+                ctx.putImageData( bmd, 0, 0 );
+
+                Stats.render();
+            }
+        })();
+    }
+
+    window.addEventListener( 'load', main );
+</script>
+</body>
+</html>
