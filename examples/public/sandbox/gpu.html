@@ -16,16 +16,17 @@
         body, html {
             font-family: 'Helvetica', sans-serif;
             font-size: 11px;
-            height: 100%;
             display: flex;
             justify-content: center;
             align-items: center;
+            min-height: 100%;
         }
 
         .container {
             display: flex;
             justify-content: center;
             align-items: center;
+            flex-direction: row;
             gap: 5px;
         }
 
@@ -58,6 +59,12 @@
             width: 100%;
             height: 100%;
         }
+
+        @media screen and (max-device-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+        }
     </style>
 </head>
 <body>
@@ -78,9 +85,56 @@
 <script type="module">
     import { WebGL2 } from "../assets/webgl.js";
     import { Stats } from "../assets/stats.js";
+    import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.17/+esm';
+
+    const VERT_SOURCE_DEFAULT = `#version 300 es
+        in vec2 a_position;
+        in vec2 a_texCoord;
+
+        out vec2 v_texCoord;
+
+        void main()
+        {
+            gl_Position = vec4(a_position, 0.0, 1.0);
+
+            // Flip the y axis used in the fragment shader
+            v_texCoord = vec2(a_texCoord.x, 1.0 - a_texCoord.y);
+        }`;
+
+    const FRAG_SOURCE_DEFAULT = `#version 300 es
+        precision highp float;
+
+        uniform sampler2D u_image;
+        uniform vec2 u_dimensions;
+
+        in vec2 v_texCoord;
+        out vec4 out_color;
+
+        void main()
+        {
+            out_color = texture(u_image, v_texCoord);
+        }`;
+
+    const FRAG_SOURCE_GREY = `#version 300 es
+        precision highp float;
+
+        uniform sampler2D u_image;
+        uniform vec2 u_dimensions;
+
+        in vec2 v_texCoord;
+        out vec4 out_color;
+
+        void main()
+        {
+            vec4 color = texture(u_image, v_texCoord);
+
+            float luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
+
+            out_color = vec4(vec3(luminance), color.a);
+        }`;
 
     const FRAG_SOURCE_BLUR = `#version 300 es
-        precision mediump float;
+        precision highp float;
 
         #define PIXEL_AT(_x, _y) (texture(u_image, v_texCoord + onePixel * vec2(_x, _y)))
 
@@ -91,7 +145,7 @@
         in vec2 v_texCoord;
         out vec4 out_color;
 
-        float PI = 3.141592653589793238;
+        float PI = 3.141592;
 
         float gaussian(float x, float sigma)
         {
@@ -120,31 +174,15 @@
             out_color = color / weightSum;
         }`;
 
-    const FRAG_SOURCE_GREY = `#version 300 es
-        precision mediump float;
 
-        uniform sampler2D u_image;
-        uniform vec2 u_dimensions;
-
-        in vec2 v_texCoord;
-        out vec4 out_color;
-
-        void main()
-        {
-            vec4 color = texture(u_image, v_texCoord);
-
-            float luminance = 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
-
-            out_color = vec4(vec3(luminance), color.a);
-        }`;
-
-    const FRAG_SOURCE_SOBEL = `#version 300 es
-        precision mediump float;
+    const FRAG_SOURCE_FAST = `#version 300 es
+        precision highp float;
 
         #define PIXEL_AT(_x, _y) (texture(u_image, v_texCoord + onePixel * vec2(_x, _y)))
 
         uniform sampler2D u_image;
         uniform vec2 u_dimensions;
+        uniform float u_threshold;
 
         in vec2 v_texCoord;
         out vec4 out_color;
@@ -152,32 +190,34 @@
         void main()
         {
             vec2 onePixel = vec2(1.0, 1.0) / u_dimensions;
+            float p = texture(u_image, v_texCoord).r;
 
-            vec4 p11 = PIXEL_AT(-1,-1); vec4 p12 = PIXEL_AT( 0,-1); vec4 p13 = PIXEL_AT( 1,-1);
-            vec4 p21 = PIXEL_AT(-1, 0); vec4 p22 = PIXEL_AT( 0, 0); vec4 p23 = PIXEL_AT( 1, 0);
-            vec4 p31 = PIXEL_AT(-1, 1); vec4 p32 = PIXEL_AT( 0, 1); vec4 p33 = PIXEL_AT( 1, 1);
+            int c = 0;
+            c += int(abs(p - PIXEL_AT(0.0,3.0).r) >= u_threshold);
+            c += int(abs(p - PIXEL_AT(-1.0,3.0).r) >= u_threshold);
+            c += int(abs(p - PIXEL_AT(-2.0,2.0).r) >= u_threshold);
+            c += int(abs(p - PIXEL_AT(-3.0,1.0).r) >= u_threshold);
+            c += int(abs(p - PIXEL_AT(-3.0,0.0).r) >= u_threshold);
+            c += int(abs(p - PIXEL_AT(-3.0,-1.0).r) >= u_threshold);
+            c += int(abs(p - PIXEL_AT(-2.0,-2.0).r) >= u_threshold);
+            c += int(abs(p - PIXEL_AT(-1.0,-3.0).r) >= u_threshold);
+            c += int(abs(p - PIXEL_AT(0.0,-3.0).r) >= u_threshold);
+            c += int(abs(p - PIXEL_AT(1.0,-3.0).r) >= u_threshold);
+            c += int(abs(p - PIXEL_AT(-2.0,2.0).r) >= u_threshold);
+            c += int(abs(p - PIXEL_AT(-1.0,3.0).r) >= u_threshold);
+            c += int(abs(p - PIXEL_AT(0.0,3.0).r) >= u_threshold);
+            c += int(abs(p - PIXEL_AT(1.0,3.0).r) >= u_threshold);
+            c += int(abs(p - PIXEL_AT(2.0,2.0).r) >= u_threshold);
+            c += int(abs(p - PIXEL_AT(1.0,3.0).r) >= u_threshold);
 
-            // https://en.wikipedia.org/wiki/Sobel_operator
-            //        |+1  0 -1|        |+1 +2 +1|
-            //  hor = |+2  0 -2|   ver =| 0  0  0|
-            //        |+1  0 -1|        |-1 -2 -1|
-            float hor = ( p11.r * 1.0 + p12.r * 2.0 + p13.r * 1.0 ) + ( p31.r * -1.0 + p32.r * -2.0 + p33.r * -1.0 );
-            float ver = ( p11.r * 1.0 + p21.r * 2.0 + p31.r * 1.0 ) + ( p13.r * -1.0 + p23.r * -2.0 + p33.r * -1.0 );
+            // mark as corner if num transition is above 12;
+            float v = (c >= 12) ? 1.0 : 0.0;
 
-            //    // map gradients to [0, 1] range
-            //    hor = (hor + 4.0) / 8.0;
-            //    ver = (ver + 4.0) / 8.0;
-
-            // Compute elements of the Harris matrix
-            float Ixx = hor * hor;
-            float Iyy = ver * ver;
-            float Ixy = hor * ver;
-
-            out_color = vec4( Ixx, Iyy, Ixy, 1 );
+            out_color = vec4(v, v, v, 1.0);
         }`;
 
     const FRAG_SOURCE_HARRIS = `#version 300 es
-        precision mediump float;
+        precision highp float;
 
         #define PIXEL_AT(_x, _y) (texture(u_image, v_texCoord + onePixel * vec2(_x, _y)))
 
@@ -185,6 +225,7 @@
         uniform vec2 u_dimensions;
         uniform float u_threshold;
         uniform float u_k;
+        uniform int u_step;
 
         in vec2 v_texCoord;
         out vec4 out_color;
@@ -201,18 +242,18 @@
 
             return (R >= threshold) ? R : 0.0;
         }
-        
+
         float ShiTomasi(float Ixx, float Iyy, float Ixy, float k, float threshold)
         {
+            // Trace of 2×2 matrix
             float trace = Ixx + Iyy;
+
+            // Calculation of 2×2 matrix determinant
             float det = (Ixx * Iyy) - (Ixy * Ixy);
 
             float sq = sqrt(trace * trace / 4.0 - det);
 
-            float n1 = trace * 0.5 + sq;
-            float n2 = trace * 0.5 - sq;
-
-            float R = min( n1, n2 );
+            float R = min( trace * 0.5 + sq, trace * 0.5 - sq );
 
             return (R >= threshold) ? R : 0.0;
         }
@@ -221,109 +262,149 @@
         {
             vec2 onePixel = vec2(1.0, 1.0) / u_dimensions;
 
-            vec4 p = (
-                    PIXEL_AT(-1, -1) + PIXEL_AT(0, -1) + PIXEL_AT(1, -1) +
-                    PIXEL_AT(-1,  0) + PIXEL_AT(0,  0) + PIXEL_AT(1,  0) +
-                    PIXEL_AT(-1,  1) + PIXEL_AT(0,  1) + PIXEL_AT(1,  1)
-                ) / 9.0;
+            vec4 p11 = PIXEL_AT(-1,-1); vec4 p12 = PIXEL_AT( 0,-1); vec4 p13 = PIXEL_AT( 1,-1);
+            vec4 p21 = PIXEL_AT(-1, 0); vec4 p22 = PIXEL_AT( 0, 0); vec4 p23 = PIXEL_AT( 1, 0);
+            vec4 p31 = PIXEL_AT(-1, 1); vec4 p32 = PIXEL_AT( 0, 1); vec4 p33 = PIXEL_AT( 1, 1);
 
-            float R = ShiTomasi(p.x, p.y, p.z, u_k, u_threshold);
+            if( u_step == 0 )
+            {
+                // https://en.wikipedia.org/wiki/Sobel_operator
+                //        |+1  0 -1|        |+1 +2 +1|
+                //  hor = |+2  0 -2|   ver =| 0  0  0|
+                //        |+1  0 -1|        |-1 -2 -1|
 
-            out_color = vec4(R, R, R, 1);
+                float hor = ( p11.r * 1.0 + p12.r * 2.0 + p13.r * 1.0 ) + ( p31.r * -1.0 + p32.r * -2.0 + p33.r * -1.0 );
+                float ver = ( p11.r * 1.0 + p21.r * 2.0 + p31.r * 1.0 ) + ( p13.r * -1.0 + p23.r * -2.0 + p33.r * -1.0 );
+
+                // map gradients to [0, 1] range
+                // hor = (hor + 4.0) / 8.0;
+                // ver = (ver + 4.0) / 8.0;
+
+                // Compute elements of the Harris matrix
+                float Ixx = hor * hor;
+                float Iyy = ver * ver;
+                float Ixy = hor * ver;
+
+                out_color = vec4( Ixx, Iyy, Ixy, 1 );
+            }
+            else
+            {
+                vec4 I = (
+                        p11 + p12 + p13 +
+                        p21 + p22 + p23 +
+                        p31 + p32 + p33
+                    ) / 9.0;
+
+                float R = Harris(I.x, I.y, I.z, u_k, u_threshold);
+
+                out_color = vec4(R, R, R, 1);
+            }
         }`;
 
     const FRAG_SOURCE_NONMAX = `#version 300 es
-    precision mediump float;
+        precision highp float;
 
-    #define PIXEL_AT(_x, _y) (texture(u_image, v_texCoord + onePixel * vec2(_x, _y)))
-
-    uniform sampler2D u_image;
-    uniform vec2 u_dimensions;
-    uniform float u_radius;
-    uniform float u_threshold;
-
-    in vec2 v_texCoord;
-    out vec4 out_color;
-
-    void main()
-    {
-        vec2 onePixel = vec2(1.0, 1.0) / u_dimensions;
-        float v = texture(u_image, v_texCoord).r;
-
-        int radius = int(u_radius);
-        bool found = false;
-
-        // Check for neighbors with larger values
-        for (int i = -radius; i <= radius && !found; i++)
-        {
-            for (int j = -radius; j <= radius && !found; j++)
-            {
-                // Skip the current pixel
-                if (i == 0 && j == 0) continue;
-
-                float neighborValue = PIXEL_AT(i, j).r;
-
-                // Found neighbor with larger or equal value
-                if (v <= neighborValue && abs(v - neighborValue) > u_threshold)
-                {
-                    found = true;
-                    v = 0.0;
-                }
-            }
-        }
-
-        out_color = vec4(v, v, v, 1);
-    }`;
-
-    const FRAG_SOURCE_DEFAULT = `#version 300 es
-        precision mediump float;
+        #define PIXEL_AT(_x, _y) (texture(u_image, v_texCoord + onePixel * vec2(_x, _y)))
 
         uniform sampler2D u_image;
         uniform vec2 u_dimensions;
+        uniform float u_radius;
 
         in vec2 v_texCoord;
         out vec4 out_color;
 
+        float PI2 = 6.283;
+
+        float localMaximum(vec2 p, vec2 onePixel, float v, int size)
+        {
+            for(int x = -size; x <= size; x++)
+            {
+                for(int y = -size; y <= size; y++)
+                {
+                    if (x == 0 && y == 0) continue;
+
+                    if (PIXEL_AT(x, y).r >= v)
+                    {
+                        return 0.0;
+                    }
+                }
+            }
+
+            return v;
+        }
+
         void main()
         {
-            out_color = texture(u_image, v_texCoord);
+            vec2 onePixel = vec2(1.0, 1.0) / u_dimensions;
+            float v = texture(u_image, v_texCoord).r;
+
+            v = localMaximum(v_texCoord, onePixel, v, int(u_radius));
+
+            out_color = vec4(v,v,v,1);
         }`;
 
-    const VERT_SOURCE_DEFAULT = `#version 300 es
-        in vec2 a_position;
-        in vec2 a_texCoord;
+    const FRAG_SOURCE_MARKER = `#version 300 es
+        precision highp float;
 
-        out vec2 v_texCoord;
+        #define PIXEL_AT(_x, _y) (texture(u_image, v_texCoord + onePixel * vec2(_x, _y)))
+
+        uniform sampler2D u_image;
+        uniform vec2 u_dimensions;
+        uniform float u_size;
+
+        in vec2 v_texCoord;
+        out vec4 out_color;
+
+        float circle(vec2 p, vec2 onePixel, float size)
+        {
+            for (float angle = 0.0; angle < 6.283; angle += 0.05)
+            {
+                vec2 center = vec2( p.x + size * cos(angle), p.y + size * sin(angle) );
+
+                if (PIXEL_AT( center.x, center.y).r > 0.0)
+                {
+                    return 1.0;
+                }
+            }
+
+            return 0.0;
+        }
+
+        float crosshair(vec2 p, vec2 onePixel, int size)
+        {
+            if (PIXEL_AT( 0, 0 ).r > 0.0) return 1.0;
+
+            for(int s = -size; s <= size; s++)
+            {
+                if (PIXEL_AT( s, 0 ).r > 0.0 || PIXEL_AT( 0, s ).r > 0.0 ) return 1.0;
+            }
+
+            return 0.0;
+        }
 
         void main()
         {
-            gl_Position = vec4(a_position, 0.0, 1.0);
-            //v_texCoord = vec2(a_texCoord.x, 1.0 - a_texCoord.y); //used in the fragment shader as current texture coordinate. Flip Y
-            v_texCoord = vec2(a_texCoord.x, a_texCoord.y);
+            vec2 onePixel = vec2(1.0, 1.0) / u_dimensions;
+            float c = crosshair( v_texCoord, onePixel, int(u_size) );
+            out_color = vec4(c,c,0,1);
         }`;
 
     class PreProcessor
     {
         constructor( canvas )
         {
-            const gl = canvas.getContext( 'webgl2' );
+            const gl = canvas.getContext( 'webgl2', { antialias: true } );
 
             if( !gl )
             {
                 throw new Error( 'WebGL 2.0 is not supported on this machine.' );
             }
 
-            // extension enables writing float textures to a frame buffer if not enabled out of the box
+            // enables writing float textures to frame buffer if not enabled by default
             if( !gl.getExtension( 'EXT_color_buffer_float' ) )
             {
                 throw new Error( 'Floating point textures not supported on this machine.' );
             }
-
-            gl.disable( gl.DEPTH_TEST );
-            gl.disable( gl.STENCIL_TEST );
-            gl.disable( gl.BLEND );
-            gl.disable( gl.DITHER );
-            gl.enableVertexAttribArray( 0 );
 
             gl.compileProgram = function( vertShaderSource, fragShaderSource, uniforms, attributes )
             {
@@ -384,26 +465,41 @@
             this.programSelf = gl.compileProgram( VERT_SOURCE_DEFAULT, FRAG_SOURCE_DEFAULT );
             this.programGrey = gl.compileProgram( VERT_SOURCE_DEFAULT, FRAG_SOURCE_GREY );
             this.programBlur = gl.compileProgram( VERT_SOURCE_DEFAULT, FRAG_SOURCE_BLUR, { radiusLocation: 'u_radius' } );
-            this.programSobel = gl.compileProgram( VERT_SOURCE_DEFAULT, FRAG_SOURCE_SOBEL );
-            this.programHarris = gl.compileProgram( VERT_SOURCE_DEFAULT, FRAG_SOURCE_HARRIS, { thresholdLocation: 'u_threshold', kLocation: 'u_k' } );
-            this.programNonmax = gl.compileProgram( VERT_SOURCE_DEFAULT, FRAG_SOURCE_NONMAX, { thresholdLocation: 'u_threshold', radiusLocation: 'u_radius' } );
+            this.programFast = gl.compileProgram( VERT_SOURCE_DEFAULT, FRAG_SOURCE_FAST, { thresholdLocation: 'u_threshold' } );
+            this.programHarris = gl.compileProgram( VERT_SOURCE_DEFAULT, FRAG_SOURCE_HARRIS, { thresholdLocation: 'u_threshold', kLocation: 'u_k', stepLocation: 'u_step' } );
+            this.programNonmax = gl.compileProgram( VERT_SOURCE_DEFAULT, FRAG_SOURCE_NONMAX, { radiusLocation: 'u_radius' } );
+            this.programMarker = gl.compileProgram( VERT_SOURCE_DEFAULT, FRAG_SOURCE_MARKER, { sizeLocation: 'u_size' } );
 
-            this.texture = WebGL2.createTexture( gl, gl.canvas.width, gl.canvas.height, gl.UNSIGNED_BYTE );
+            this.texture = WebGL2.createTexture( gl, gl.canvas.width, gl.canvas.height, gl.UNSIGNED_BYTE, true );
 
-            this.ping = WebGL2.createFrameBuffer( gl, gl.canvas.width, gl.canvas.height, gl.FLOAT );
-            this.pong = WebGL2.createFrameBuffer( gl, gl.canvas.width, gl.canvas.height, gl.FLOAT );
+            this.ping = WebGL2.createFrameBuffer( gl, gl.canvas.width, gl.canvas.height, gl.FLOAT, true );
+            this.pong = WebGL2.createFrameBuffer( gl, gl.canvas.width, gl.canvas.height, gl.FLOAT, true );
 
-            this.rgba = new Uint8ClampedArray( gl.canvas.width * gl.canvas.height * 4 );
+            this.bufferSize = gl.canvas.width * gl.canvas.height * 4;
+
+            // to read from webgl canvas
+            //this.rgba = new Uint8ClampedArray( this.bufferSize );
+
+            // to read from our float ping pong buffers
+            this.rgba = new Float32Array( this.bufferSize );
+
+            // Create a buffer to store the pixel data to test async reading of pixels
+            this.pbo = gl.createBuffer();
+            gl.bindBuffer( gl.PIXEL_PACK_BUFFER, this.pbo );
+            gl.bufferData( gl.PIXEL_PACK_BUFFER, this.bufferSize, gl.STATIC_DRAW );
+            gl.bindBuffer( gl.PIXEL_PACK_BUFFER, null );
 
             this.gl = gl;
         }
 
-        process( imageOrVideo )
+        process( source, blur = 1.0, harrisK = 0.04, harrisThr = 0.01, nmsRadius = 3 )
         {
+            if( !this.gl ) return this.rgba;
+
             const gl = this.gl;
 
-            const sourceWidth = imageOrVideo.naturalWidth || imageOrVideo.videoWidth || imageOrVideo.width;
-            const sourceHeight = imageOrVideo.naturalHeight || imageOrVideo.videoHeight || imageOrVideo.height;
+            const sourceWidth = source.videoWidth || source.naturalWidth || source.width;
+            const sourceHeight = source.videoHeight || source.naturalHeight || source.height;
 
             const canvasAspectRatio = gl.canvas.width / gl.canvas.height;
             const sourceAspectRatio = sourceWidth / sourceHeight;
@@ -420,46 +516,77 @@
                 xScale = sourceAspectRatio / canvasAspectRatio;
             }
 
-            // upload image to GPU
+            // upload image/video to GPU
+            //-------------------------------------------------------------------------------
             gl.bindTexture( gl.TEXTURE_2D, this.texture );
-            gl.texImage2D( gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, imageOrVideo );
+            gl.texImage2D( gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source );
+            //-------------------------------------------------------------------------------
 
-            // compute image scale
-            gl.runProgram( this.programSelf, this.texture, this.ping.fbo, xScale, yScale );
+            // compute media scale and convert to greyscale
+            //-------------------------------------------------------------------------------
+            gl.runProgram( this.programGrey, this.texture, this.ping.fbo, xScale, yScale );
+            //-------------------------------------------------------------------------------
 
-            // compute greyscale
-            gl.runProgram( this.programGrey, this.ping.tex, this.pong.fbo );
-
-            // compute image blur
+            // compute blur
+            //-------------------------------------------------------------------------------
             gl.useProgram( this.programBlur );
-            gl.uniform1f( this.programBlur.radiusLocation, 3.0 );
-            gl.runProgram( this.programBlur, this.pong.tex, this.ping.fbo );
+            gl.uniform1f( this.programBlur.radiusLocation, blur );
+            gl.runProgram( this.programBlur, this.ping.tex, this.pong.fbo );
+            //-------------------------------------------------------------------------------
 
-            // compute Sobel gradients
-            gl.runProgram( this.programSobel, this.ping.tex, this.pong.fbo );
-
-            // compute Sobel blur
-            gl.useProgram( this.programBlur );
-            gl.uniform1f( this.programBlur.radiusLocation, 1.0 );
-            gl.runProgram( this.programBlur, this.pong.tex, this.ping.fbo );
-
-            // compute Harris response
+            // compute Harris corners first pass
+            //-------------------------------------------------------------------------------
             gl.useProgram( this.programHarris );
-            gl.uniform1f( this.programHarris.kLocation, 0.04 );
-            gl.uniform1f( this.programHarris.thresholdLocation, 0.01 );
+            gl.uniform1i( this.programHarris.stepLocation, 0 );
+            gl.runProgram( this.programHarris, this.pong.tex, this.ping.fbo );
+            //-------------------------------------------------------------------------------
+
+            // compute Harris corners second pass
+            //-------------------------------------------------------------------------------
+            gl.uniform1i( this.programHarris.stepLocation, 1 );
+            gl.uniform1f( this.programHarris.kLocation, harrisK );
+            gl.uniform1f( this.programHarris.thresholdLocation, harrisThr );
             gl.runProgram( this.programHarris, this.ping.tex, this.pong.fbo );
+            //-------------------------------------------------------------------------------
 
             // compute non-maximum suppression
+            //-------------------------------------------------------------------------------
             gl.useProgram( this.programNonmax );
-            gl.uniform1f( this.programNonmax.radiusLocation, 3 );
-            gl.uniform1f( this.programNonmax.thresholdLocation, 0.001 );
+            gl.uniform1f( this.programNonmax.radiusLocation, nmsRadius );
             gl.runProgram( this.programNonmax, this.pong.tex, this.ping.fbo );
+            //-------------------------------------------------------------------------------
 
-            // render processed image
-            gl.runProgram( this.programSelf, this.ping.tex, null );
+            // render corners
+            //-------------------------------------------------------------------------------
+            gl.useProgram( this.programMarker );
+            gl.uniform1f( this.programMarker.sizeLocation, 3.0 );
+            gl.runProgram( this.programMarker, this.ping.tex, null );
+            //-------------------------------------------------------------------------------
 
-            // grab processed image pixels
-            gl.readPixels( 0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, this.rgba );
+            // read processed image pixels async through buffer
+            //-------------------------------------------------------------------------------
+            // gl.bindBuffer( gl.PIXEL_PACK_BUFFER, this.pbo );
+            //
+            // // Read the pixels asynchronously
+            // gl.readPixels( 0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, 0 );
+            //
+            // // Wait for the read operation to complete
+            // gl.finish();
+            //
+            // // Get the pixel data from the buffer
+            // gl.bindBuffer( gl.PIXEL_PACK_BUFFER, this.pbo );
+            // gl.getBufferSubData( gl.PIXEL_PACK_BUFFER, 0, this.rgba );
+            //
+            // // Unbind the buffer and delete it
+            // gl.bindBuffer( gl.PIXEL_PACK_BUFFER, null );
+            //-------------------------------------------------------------------------------
+
+            // read processed image pixels from ping pong buffer
+            //-------------------------------------------------------------------------------
+            gl.bindFramebuffer( gl.FRAMEBUFFER, this.ping.fbo );
+            gl.readPixels( 0, 0, gl.canvas.width, gl.canvas.height, gl.RGBA, gl.FLOAT, this.rgba );
+            gl.bindFramebuffer( gl.FRAMEBUFFER, null );
+            //-------------------------------------------------------------------------------
 
             return this.rgba;
         }
@@ -484,7 +611,7 @@
 
                     if( x > minX && y > minY && x < maxX && y < maxY )
                     {
-                        keypoints.push( { x: x, y: height - y, response: response } );
+                        keypoints.push( { x: x, y: y, response: response } );
                     }
                 }
 
@@ -497,6 +624,21 @@
 
     function main()
     {
+        const options = {
+            blur: 3,
+            harrisK: 0.04,
+            harrisThr: 0.01,
+            nmsRadius: 3,
+            toggleSource: () => toggleSource()
+        };
+
+        const gui = new GUI();
+        gui.add( options, 'blur', 1, 10.0, 2 );
+        gui.add( options, 'harrisK', 0.02, 0.2, 0.01 );
+        gui.add( options, 'harrisThr', 0.01, 0.2, 0.01 );
+        gui.add( options, 'nmsRadius', 1, 10.0, 1 );
+        gui.add( options, 'toggleSource' );
+
         const video = document.getElementById( 'video' );
         const image = document.getElementById( 'image' );
         const canvas2d = document.getElementById( 'canvas2d' );
@@ -512,27 +654,42 @@
 
         const ctx = canvas2d.getContext( '2d' );
         const rect = canvas3d.getBoundingClientRect();
+        const ratio = 1;//window.devicePixelRatio || 1;
         const bmd = new ImageData( rect.width, rect.height );
         const clear = new Uint8ClampedArray( rect.width * rect.height * 4 );
+        clear.fill( 0 );
 
         Stats.add( 'gpu' );
         Stats.add( 'cpu' );
+        Stats.add( 'total' );
+        document.body.appendChild( Stats.el );
 
-        clear.fill( 0 );
-
-        canvas2d.width = canvas3d.width = rect.width;
-        canvas2d.height = canvas3d.height = rect.height;
+        canvas2d.width = canvas3d.width = rect.width * ratio;
+        canvas2d.height = canvas3d.height = rect.height * ratio;
         canvas2d.style.width = canvas3d.style.width = rect.width + 'px';
         canvas2d.style.height = canvas3d.style.height = rect.height + 'px';
 
-        let media = video;
-
         const gpu = new PreProcessor( canvas3d );
 
-        document.body.appendChild( Stats.el );
-        document.body.addEventListener( "click", () => media = (media === video ? image : video), false );
+        let media = null;
 
-        (function render()
+        function toggleSource()
+        {
+            if( media === video )
+            {
+                image.parentElement.style.display = 'block';
+                video.parentElement.style.display = 'none';
+                media = image;
+            }
+            else
+            {
+                image.parentElement.style.display = 'none';
+                video.parentElement.style.display = 'block';
+                media = video;
+            }
+        }
+
+        function render()
         {
             requestAnimationFrame( render );
 
@@ -540,8 +697,10 @@
             {
                 Stats.next();
 
+                Stats.start( 'total' );
+
                 Stats.start( 'gpu' );
-                const rgba = gpu.process( media );
+                const rgba = gpu.process( media, options.blur, options.harrisK, options.harrisThr, options.nmsRadius );
                 Stats.stop( 'gpu' );
 
                 Stats.start( 'cpu' );
@@ -566,10 +725,14 @@
                 }
 
                 ctx.putImageData( bmd, 0, 0 );
+                Stats.stop( 'total' );
 
                 Stats.render();
             }
-        })();
+        }
+
+        toggleSource();
+        render();
     }
 
     window.addEventListener( 'load', main );
