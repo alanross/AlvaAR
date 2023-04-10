@@ -4,7 +4,7 @@
     <meta charset="utf-8"/>
     <meta content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no" name="viewport"/>
     <meta content="IE=edge" http-equiv="X-UA-Compatible"/>
-    <title>WebGL Harris1</title>
+    <title>WebGL Harris Corners</title>
     <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
     <style>
         * {
@@ -51,6 +51,7 @@
         .container canvas {
             width: 100%;
             height: 100%;
+            background: #333;
         }
 
         .container img,
@@ -69,16 +70,16 @@
 </head>
 <body>
 <div class="container">
-    <div data-title="Source Image">
+    <div data-title="Source">
         <img id="image" src="../assets/image.jpg" alt="image">
     </div>
-    <div data-title="Source Video">
+    <div data-title="Source">
         <video id="video" src="../assets/video.mp4" muted playsinline></video>
     </div>
     <div data-title="Canvas WebGL">
         <canvas id="canvas3d"></canvas>
     </div>
-    <div data-title="Canvas 2D Keypoints">
+    <div data-title="Canvas 2D">
         <canvas id="canvas2d"></canvas>
     </div>
 </div>
@@ -280,12 +281,11 @@
                 // hor = (hor + 4.0) / 8.0;
                 // ver = (ver + 4.0) / 8.0;
 
-                // Compute elements of the Harris matrix
                 float Ixx = hor * hor;
                 float Iyy = ver * ver;
                 float Ixy = hor * ver;
 
-                out_color = vec4( Ixx, Iyy, Ixy, 1 );
+                out_color = vec4(Ixx, Iyy, Ixy, 1);
             }
             else
             {
@@ -313,9 +313,7 @@
         in vec2 v_texCoord;
         out vec4 out_color;
 
-        float PI2 = 6.283;
-
-        float localMaximum(vec2 p, vec2 onePixel, float v, int size)
+        float localMaximum(vec2 p, vec2 onePixel, float value, int size)
         {
             for(int x = -size; x <= size; x++)
             {
@@ -323,24 +321,24 @@
                 {
                     if (x == 0 && y == 0) continue;
 
-                    if (PIXEL_AT(x, y).r >= v)
+                    if (PIXEL_AT(x, y).r >= value)
                     {
                         return 0.0;
                     }
                 }
             }
 
-            return v;
+            return value;
         }
 
         void main()
         {
             vec2 onePixel = vec2(1.0, 1.0) / u_dimensions;
-            float v = texture(u_image, v_texCoord).r;
+            float value = texture(u_image, v_texCoord).r;
 
-            v = localMaximum(v_texCoord, onePixel, v, int(u_radius));
+            value = localMaximum(v_texCoord, onePixel, value, int(u_radius));
 
-            out_color = vec4(v,v,v,1);
+            out_color = vec4(value,value,value,1);
         }`;
 
     const FRAG_SOURCE_MARKER = `#version 300 es
@@ -386,7 +384,7 @@
         {
             vec2 onePixel = vec2(1.0, 1.0) / u_dimensions;
             float c = crosshair( v_texCoord, onePixel, int(u_size) );
-            out_color = vec4(c,c,0,1);
+            out_color = vec4(c,c,0,c);
         }`;
 
     class PreProcessor
@@ -470,10 +468,10 @@
             this.programNonmax = gl.compileProgram( VERT_SOURCE_DEFAULT, FRAG_SOURCE_NONMAX, { radiusLocation: 'u_radius' } );
             this.programMarker = gl.compileProgram( VERT_SOURCE_DEFAULT, FRAG_SOURCE_MARKER, { sizeLocation: 'u_size' } );
 
-            this.texture = WebGL2.createTexture( gl, gl.canvas.width, gl.canvas.height, gl.UNSIGNED_BYTE, true );
+            this.texture = WebGL2.createTexture( gl, gl.canvas.width, gl.canvas.height, gl.UNSIGNED_BYTE, true, false );
 
-            this.ping = WebGL2.createFrameBuffer( gl, gl.canvas.width, gl.canvas.height, gl.FLOAT, true );
-            this.pong = WebGL2.createFrameBuffer( gl, gl.canvas.width, gl.canvas.height, gl.FLOAT, true );
+            this.ping = WebGL2.createFrameBuffer( gl, gl.canvas.width, gl.canvas.height, gl.FLOAT, true, true );
+            this.pong = WebGL2.createFrameBuffer( gl, gl.canvas.width, gl.canvas.height, gl.FLOAT, true, true );
 
             this.bufferSize = gl.canvas.width * gl.canvas.height * 4;
 
@@ -522,7 +520,7 @@
             gl.texImage2D( gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source );
             //-------------------------------------------------------------------------------
 
-            // compute media scale and convert to greyscale
+            // compute media size and convert to greyscale
             //-------------------------------------------------------------------------------
             gl.runProgram( this.programGrey, this.texture, this.ping.fbo, xScale, yScale );
             //-------------------------------------------------------------------------------
@@ -559,7 +557,7 @@
             // render corners
             //-------------------------------------------------------------------------------
             gl.useProgram( this.programMarker );
-            gl.uniform1f( this.programMarker.sizeLocation, 3.0 );
+            gl.uniform1f( this.programMarker.sizeLocation, 2.0 );
             gl.runProgram( this.programMarker, this.ping.tex, null );
             //-------------------------------------------------------------------------------
 
@@ -625,7 +623,7 @@
     function main()
     {
         const options = {
-            blur: 3,
+            blur: 1,
             harrisK: 0.04,
             harrisThr: 0.01,
             nmsRadius: 3,
@@ -633,7 +631,7 @@
         };
 
         const gui = new GUI();
-        gui.add( options, 'blur', 1, 10.0, 2 );
+        gui.add( options, 'blur', 1, 10.0, 1 );
         gui.add( options, 'harrisK', 0.02, 0.2, 0.01 );
         gui.add( options, 'harrisThr', 0.01, 0.2, 0.01 );
         gui.add( options, 'nmsRadius', 1, 10.0, 1 );
@@ -656,8 +654,6 @@
         const rect = canvas3d.getBoundingClientRect();
         const ratio = 1;//window.devicePixelRatio || 1;
         const bmd = new ImageData( rect.width, rect.height );
-        const clear = new Uint8ClampedArray( rect.width * rect.height * 4 );
-        clear.fill( 0 );
 
         Stats.add( 'gpu' );
         Stats.add( 'cpu' );
@@ -707,9 +703,9 @@
                 const keypoints = gpu.getKeypoints( rgba, canvas3d.width, canvas3d.height );
                 Stats.stop( 'cpu' );
 
-                bmd.data.set( clear );
+                bmd.data.set( rgba );
 
-                const color = 0xFFFF00FF;
+                const color = 0xFF00FFFF;
                 const pixels = new Uint32Array( bmd.data.buffer );
                 const width = bmd.width;
 
@@ -718,10 +714,14 @@
                     const index = (keypoint.x + keypoint.y * width);
 
                     pixels[index] = color;
+                    pixels[index - 2] = color;
                     pixels[index - 1] = color;
                     pixels[index + 1] = color;
+                    pixels[index + 2] = color;
                     pixels[index - width] = color;
+                    pixels[index - width * 2] = color;
                     pixels[index + width] = color;
+                    pixels[index + width * 2] = color;
                 }
 
                 ctx.putImageData( bmd, 0, 0 );
