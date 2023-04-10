@@ -45,7 +45,7 @@ class WebGL2
         return program;
     }
 
-    static createTexture( gl, width, height, type, flipY = false )
+    static createTexture( gl, width, height, type, flipY = false, useNearest = false )
     {
         const texId = gl.createTexture();
 
@@ -54,8 +54,8 @@ class WebGL2
 
         gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE );
         gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE );
-        gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST );
-        gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST );
+        gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, useNearest ? gl.NEAREST : gl.LINEAR );
+        gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, useNearest ? gl.NEAREST : gl.LINEAR );
 
         const textureType = type || gl.UNSIGNED_BYTE;
         const internalFormat = textureType === gl.FLOAT ? gl.RGBA32F : gl.RGBA;
@@ -65,9 +65,9 @@ class WebGL2
         return texId;
     }
 
-    static createFrameBuffer( gl, width, height, textureType = undefined, textureFlipY = false )
+    static createFrameBuffer( gl, width, height, textureType = undefined, textureFlipY = false, textureUseNearest = false )
     {
-        const tex = WebGL2.createTexture( gl, width, height, textureType, textureFlipY );
+        const tex = WebGL2.createTexture( gl, width, height, textureType, textureFlipY, textureUseNearest );
         const fbo = gl.createFramebuffer();
 
         gl.bindFramebuffer( gl.FRAMEBUFFER, fbo );
