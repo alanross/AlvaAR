@@ -4,7 +4,7 @@
     <meta charset="utf-8"/>
     <meta content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no" name="viewport"/>
     <meta content="IE=edge" http-equiv="X-UA-Compatible"/>
-    <title>WebGL Harris Corners</title>
+    <title>WebGL Preprocessing</title>
     <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
     <style>
         * {
@@ -28,16 +28,17 @@
             align-items: center;
             flex-direction: row;
             gap: 5px;
+            position: relative;
         }
 
-        .container div {
+        .container > div {
             width: 300px;
             height: 450px;
             position: relative;
             outline: 1px solid #eee;
         }
 
-        .container div::after {
+        .container > div::after {
             position: absolute;
             display: block;
             bottom: 0;
@@ -59,6 +60,25 @@
             object-fit: cover;
             width: 100%;
             height: 100%;
+        }
+
+        .container.stacked {
+            width: 300px;
+            height: 450px;
+        }
+
+        .container.stacked > div {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .container.stacked canvas {
+            background: transparent;
+        }
+
+        .hide {
+            display: none;
         }
 
         @media screen and (max-device-width: 768px) {
@@ -175,7 +195,6 @@
             out_color = color / weightSum;
         }`;
 
-
     const FRAG_SOURCE_FAST = `#version 300 es
         precision highp float;
 
@@ -221,6 +240,9 @@
         precision highp float;
 
         #define PIXEL_AT(_x, _y) (texture(u_image, v_texCoord + onePixel * vec2(_x, _y)))
+        #define g1 0.25
+        #define g2 0.125
+        #define g3 0.0625
 
         uniform sampler2D u_image;
         uniform vec2 u_dimensions;
@@ -289,11 +311,9 @@
             }
             else
             {
-                vec4 I = (
-                        p11 + p12 + p13 +
-                        p21 + p22 + p23 +
-                        p31 + p32 + p33
-                    ) / 9.0;
+                vec4 I = ( p11 * g3 + p12 * g2 + p13 * g3 ) +
+                         ( p21 * g2 + p22 * g1 + p23 * g2 ) +
+                         ( p31 * g3 + p32 * g2 + p33 * g3 );
 
                 float R = Harris(I.x, I.y, I.z, u_k, u_threshold);
 
@@ -623,11 +643,14 @@
     function main()
     {
         const options = {
-            blur: 1,
-            harrisK: 0.04,
-            harrisThr: 0.01,
-            nmsRadius: 3,
-            toggleSource: () => toggleSource()
+            'blur': 1,
+            'harrisK': 0.04,
+            'harrisThr': 0.01,
+            'nmsRadius': 3,
+            'toggle source': () => toggleSource(),
+            'toggle stacking': () => document.querySelector( '.container' ).classList.toggle( "stacked" ),
+            'toggle webgl': () => canvas2d.parentElement.classList.toggle( "hide" ),
+            'toggle 2d': () => canvas3d.parentElement.classList.toggle( "hide" ),
         };
 
         const gui = new GUI();
@@ -635,7 +658,10 @@
         gui.add( options, 'harrisK', 0.02, 0.2, 0.01 );
         gui.add( options, 'harrisThr', 0.01, 0.2, 0.01 );
         gui.add( options, 'nmsRadius', 1, 10.0, 1 );
-        gui.add( options, 'toggleSource' );
+        gui.add( options, 'toggle source' );
+        gui.add( options, 'toggle stacking' );
+        gui.add( options, 'toggle webgl' );
+        gui.add( options, 'toggle 2d' );
 
         const video = document.getElementById( 'video' );
         const image = document.getElementById( 'image' );
@@ -652,7 +678,7 @@
 
         const ctx = canvas2d.getContext( '2d' );
         const rect = canvas3d.getBoundingClientRect();
-        const ratio = 1;//window.devicePixelRatio || 1;
+        const ratio = 1; //window.devicePixelRatio || 1;
         const bmd = new ImageData( rect.width, rect.height );
 
         Stats.add( 'gpu' );
@@ -673,14 +699,14 @@
         {
             if( media === video )
             {
-                image.parentElement.style.display = 'block';
-                video.parentElement.style.display = 'none';
+                image.parentElement.classList.remove( 'hide' );
+                video.parentElement.classList.add( 'hide' );
                 media = image;
             }
             else
             {
-                image.parentElement.style.display = 'none';
-                video.parentElement.style.display = 'block';
+                image.parentElement.classList.add( 'hide' );
+                video.parentElement.classList.remove( 'hide' );
                 media = video;
             }
         }
@@ -705,7 +731,7 @@
 
                 bmd.data.set( rgba );
 
-                const color = 0xFF00FFFF;
+                const color = 0xFFFF00FF;
                 const pixels = new Uint32Array( bmd.data.buffer );
                 const width = bmd.width;
 
