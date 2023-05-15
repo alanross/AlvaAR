@@ -1,7 +1,7 @@
 {
   "name": "simple-https-server",
   "version": "1.0.0",
-  "description": "Simple https/cors server",
+  "description": "Simple Express server with HTTPS to serve static pages",
   "author": "Alan Ross",
   "private": true,
   "type": "module",
@@ -15,6 +15,8 @@
   },
   "dependencies": {
     "ip": "^1.1.5",
+    "express": "^4.17.1",
+    "https": "^1.0.0",
     "socket.io": "^4.5.4"
   }
 }
