@@ -206,20 +206,28 @@ class ARSimpleView
         this.body.classList.remove( "tracking" );
     }
 
-    createObjectWithPose( pose, scale = 0.5 )
+    createObjectWithPose( pose, scale = 1.0 )
     {
-        const obj = new THREE.Mesh( new THREE.IcosahedronGeometry( 1, 0 ), new THREE.MeshNormalMaterial( { flatShading: true } ) );
-        obj.scale.set( scale, scale, scale );
+        const plane = new THREE.Mesh( new THREE.PlaneGeometry( scale, scale ), new THREE.MeshBasicMaterial( {
+            color: 0xffffff,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.1
+        } ) );
 
-        this.applyPose( pose, obj.quaternion, obj.position );
+        scale *= 0.25;
 
-        this.scene.add( obj );
+        const cube = new THREE.Mesh( new THREE.BoxGeometry( scale, scale, scale ), new THREE.MeshNormalMaterial( { flatShading: true } ) );
+        cube.position.z = scale * 0.5;
+
+        plane.add( cube );
+
+        this.applyPose( pose, plane.quaternion, plane.position );
+        this.scene.add( plane );
 
         if( this.mapView )
         {
-            const clone = obj.clone();
-
-            clone.scale.set( scale, scale, scale );
+            const clone = plane.clone();
 
             this.mapView.scene.add( clone );
         }
