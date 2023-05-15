@@ -74,26 +74,3 @@ void Utils::toPoseMat(Sophus::SE3d Twc, cv::Mat &pose)
     pose.at<float>(3, 2) = 0.0;
     pose.at<float>(3, 3) = 1.0;
 }
-
-cv::Mat Utils::expSO3(const cv::Mat &v)
-{
-    const float x = v.at<float>(0);
-    const float y = v.at<float>(1);
-    const float z = v.at<float>(2);
-
-    cv::Mat I = cv::Mat::eye(3, 3, CV_32F);
-
-    const float d2 = x * x + y * y + z * z;
-    const float d = sqrt(d2);
-
-    cv::Mat W = (cv::Mat_<float>(3, 3) << 0, -z, y, z, 0, -x, -y, x, 0);
-
-    if (d < 0.0001)
-    {
-        return (I + W + 0.5f * W * W);
-    }
-    else
-    {
-        return (I + W * sin(d) / d + W * W * (1.0f - cos(d)) / d2);
-    }
-}

@@ -176,7 +176,7 @@ cv::Mat System::processPlane(std::vector<Eigen::Vector3d> mapPoints, Sophus::SE3
 
     const long numMapPoints = mapPoints.size();
 
-    if (numMapPoints < 16)
+    if (numMapPoints < 32)
     {
         std::cout << "- [System]: Too few points to detect plane: " << numMapPoints << std::endl;
 
@@ -185,7 +185,7 @@ cv::Mat System::processPlane(std::vector<Eigen::Vector3d> mapPoints, Sophus::SE3
 
     std::vector<cv::Mat> points(numMapPoints);
     std::vector<int> indices(numMapPoints);
-    std::vector<float> distances;
+    std::vector<float> distances(numMapPoints, 0.0f);
     float bestDist = 1e10;
 
     for (int i = 0; i < numMapPoints; i++)
@@ -197,18 +197,18 @@ cv::Mat System::processPlane(std::vector<Eigen::Vector3d> mapPoints, Sophus::SE3
     }
 
     //RANSAC to find inliers
+    std::vector<float> dists(numMapPoints, 0);
+    std::vector<int> indicesPicked(3);
     for (int n = 0; n < numIterations; n++)
     {
         // Pick 3 random points
-        int numToPick = 3;
-        std::vector<int> indicesPicked;
-        std::sample(indices.begin(), indices.end(), std::back_inserter(indicesPicked), numToPick, std::mt19937{std::random_device{}()});
+        std::sample(indices.begin(), indices.end(), indicesPicked.begin(), 3, std::mt19937{std::random_device{}()});
 
         cv::Mat u, w, vt;
         cv::Mat A(3, 4, CV_32F);
         A.col(3) = cv::Mat::ones(3, 1, CV_32F);
 
-        for (int i = 0; i < numToPick; i++)
+        for (int i = 0; i < 3; i++)
         {
             A.row(i).colRange(0, 3) = points[indicesPicked[i]].t();
         }
@@ -220,7 +220,14 @@ cv::Mat System::processPlane(std::vector<Eigen::Vector3d> mapPoints, Sophus::SE3
         const float c = vt.at<float>(3, 2);
         const float d = vt.at<float>(3, 3);
 
-        std::vector<float> dists(numMapPoints, 0);
+        // Check if the plane is horizontal. Consider plane horizontal if angle between plane normal and z-axis is less than 5 deg
+        const float angleThreshold = 5.0f * CV_PI / 180.0f;
+        const cv::Vec3f normal(a, b, c);
+        const cv::Vec3f zAxis(0.0f, 0.0f, 1.0f);
+        if (cv::norm(normal.cross(zAxis)) > sin(angleThreshold))
+        {
+            continue;
+        }
 
         const float f = 1.0f / std::sqrt(a * a + b * b + c * c + d * d);
 
@@ -229,11 +236,9 @@ cv::Mat System::processPlane(std::vector<Eigen::Vector3d> mapPoints, Sophus::SE3
             dists[i] = std::fabs(points[i].at<float>(0) * a + points[i].at<float>(1) * b + points[i].at<float>(2) * c + d) * f;
         }
 
-        std::vector<float> distsSorted = dists;
-        sort(distsSorted.begin(), distsSorted.end());
+        std::nth_element(dists.begin(), dists.begin() + std::max((int) (0.2 * numMapPoints), 20), dists.end());
 
-        int nth = std::max((int) (0.2 * numMapPoints), 20);
-        const float medianDist = distsSorted[nth];
+        const float medianDist = dists[std::max((int) (0.2 * numMapPoints), 20)];
 
         if (medianDist < bestDist)
         {
@@ -243,7 +248,7 @@ cv::Mat System::processPlane(std::vector<Eigen::Vector3d> mapPoints, Sophus::SE3
     }
 
     // Compute threshold inlier/outlier
-    const float threshold = 1.4 * bestDist;
+    const float threshold = 1.4f * bestDist;
     std::vector<cv::Mat> pointsInliers;
 
     for (int i = 0; i < numMapPoints; i++)
@@ -254,42 +259,40 @@ cv::Mat System::processPlane(std::vector<Eigen::Vector3d> mapPoints, Sophus::SE3
         }
     }
 
-    // convert cam pos from Eigen to CV Mat format
-    cv::Mat camPose(4, 4, CV_32F);
-    Utils::toPoseMat(Twc, camPose);
-
-    // arbitrary orientation along normal
-    float rang = -3.14f / 2 + ((float) rand() / (float) RAND_MAX) * 3.14f;
-
     const long numInliers = pointsInliers.size();
 
-    // recompute plane with all pointsInliers
-    cv::Mat A = cv::Mat(numInliers, 4, CV_32F);
-    A.col(3) = cv::Mat::ones(numInliers, 1, CV_32F);
+    // Recompute plane with all points inliers
+    cv::Mat planeCoefficientsMatrix = cv::Mat(numInliers, 4, CV_32F);
+    planeCoefficientsMatrix.col(3) = cv::Mat::ones(numInliers, 1, CV_32F);
 
-    cv::Mat origin = cv::Mat::zeros(3, 1, CV_32F);
+    cv::Mat inliersOrigin = cv::Mat::zeros(3, 1, CV_32F);
 
     for (int i = 0; i < numInliers; i++)
     {
-        cv::Mat Xw = pointsInliers[i];
-        origin += Xw;
-        A.row(i).colRange(0, 3) = Xw.t();
+        cv::Mat worldPoint = pointsInliers[i];
+        inliersOrigin += worldPoint;
+        planeCoefficientsMatrix.row(i).colRange(0, 3) = worldPoint.t();
     }
 
-    A.resize(numInliers);
+    planeCoefficientsMatrix.resize(numInliers);
 
     cv::Mat u, w, vt;
-    cv::SVDecomp(A, w, u, vt, cv::SVD::MODIFY_A | cv::SVD::FULL_UV);
+    cv::SVDecomp(planeCoefficientsMatrix, w, u, vt, cv::SVD::MODIFY_A | cv::SVD::FULL_UV);
 
     float a = vt.at<float>(3, 0);
     float b = vt.at<float>(3, 1);
     float c = vt.at<float>(3, 2);
 
-    origin = origin * (1.0f / numInliers);
+    inliersOrigin = inliersOrigin * (1.0f / numInliers);
     const float f = 1.0f / sqrt(a * a + b * b + c * c);
 
+    // Convert cam pos from Eigen to CV Mat format
+    cv::Mat camPose(4, 4, CV_32F);
+    Utils::toPoseMat(Twc, camPose);
+
+    // Computes the camera center in world coordinates
     cv::Mat Oc = -camPose.colRange(0, 3).rowRange(0, 3).t() * camPose.rowRange(0, 3).col(3);
-    cv::Mat mXC = Oc - origin;
+    cv::Mat mXC = Oc - inliersOrigin; //compute vector from the origin of the plane to the camera center
 
     if ((mXC.at<float>(0) * a + mXC.at<float>(1) * b + mXC.at<float>(2) * c) > 0)
     {
@@ -303,16 +306,21 @@ cv::Mat System::processPlane(std::vector<Eigen::Vector3d> mapPoints, Sophus::SE3
     const float nz = c * f;
 
     cv::Mat normal = (cv::Mat_<float>(3, 1) << nx, ny, nz);
-    cv::Mat up = (cv::Mat_<float>(3, 1) << 0.0f, 1.0f, 0.0f);
+    cv::Mat up = (cv::Mat_<float>(3, 1) << 1.0f, 0.0f, 0.0f);
     cv::Mat v = up.cross(normal);
     const float sa = cv::norm(v);
     const float ca = up.dot(normal);
     const float ang = atan2(sa, ca);
 
-    planePose = cv::Mat::eye(4, 4, CV_32F);
+    // Convert rotation vectors to rotation matrix
+    cv::Mat R1;
+    cv::Mat R2;
+    cv::Rodrigues((v * ang / sa), R1);
+    cv::Rodrigues(up, R2);
 
-    planePose.rowRange(0, 3).colRange(0, 3) = Utils::expSO3(v * ang / sa) * Utils::expSO3(up * rang);
-    origin.copyTo(planePose.col(3).rowRange(0, 3));
+    planePose = cv::Mat::eye(4, 4, CV_32F);
+    planePose.rowRange(0, 3).colRange(0, 3) = R1 * R2;      // rotation
+    inliersOrigin.copyTo(planePose.col(3).rowRange(0, 3));  // translation
 
     return planePose;
 }

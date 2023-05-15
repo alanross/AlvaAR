@@ -14,6 +14,4 @@ public:
     static void toPoseArray(cv::Mat mat, float *pose);
 
     static void toPoseMat(Sophus::SE3d Twc, cv::Mat &pose);
-
-    static cv::Mat expSO3(const cv::Mat &v);
 };
