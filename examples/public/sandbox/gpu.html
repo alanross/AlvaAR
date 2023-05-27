@@ -628,25 +628,30 @@
             const minY = border;
             const maxY = height - border;
 
-            const keypoints = [];
+            const maxKeypoints = Math.ceil( rgba.length / 4 );
+            const keypoints = new Array( maxKeypoints );
+            let numKeypoints = 0;
 
-            for( let i = 0, j = 0; i < rgba.length; i += 4 )
+            let x = 0;
+            let y = 0;
+
+            for( let i = 0; i < rgba.length; i += 4 )
             {
-                const response = rgba[i]; // red channel contains corner data
+                const response = rgba[i];
 
-                if( response > 0 )
+                if( response > 0 && x >= minX && y >= minY && x < maxX && y < maxY )
                 {
-                    const x = j % width;
-                    const y = ~~(j / width);
-
-                    if( x > minX && y > minY && x < maxX && y < maxY )
-                    {
-                        keypoints.push( { x: x, y: y, response: response } );
-                    }
+                    keypoints[numKeypoints++] = { x: x, y: y, response: response };
                 }
 
-                j++;
+                if( ++x === width )
+                {
+                    x = 0;
+                    y++;
+                }
             }
+
+            keypoints.length = numKeypoints;
 
             return keypoints;
         }
