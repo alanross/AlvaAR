@@ -1,5 +1,4 @@
 #include "mapper.hpp"
-
 #include <memory>
 
 Mapper::Mapper(std::shared_ptr<State> state, std::shared_ptr<MapManager> mapManager, std::shared_ptr<Frame> frame)
@@ -11,12 +10,11 @@ void Mapper::processNewKeyframe(const Keyframe &keyframe)
 {
     timedOperationStart();
 
-    // Get new kf ptr
     std::shared_ptr<Frame> newKeyframe = mapManager_->getKeyframe(keyframe.keyframeId_);
     assert(newKeyframe);
 
     // Triangulate temporal
-    if (newKeyframe->numKeypoints2d_ > 0 && newKeyframe->keyframeId_ > 0)
+    if (newKeyframe->keyframeId_ > 0 && newKeyframe->numKeypoints2d_ > 0)
     {
         triangulateTemporal(*newKeyframe);
     }
@@ -30,7 +28,8 @@ void Mapper::processNewKeyframe(const Keyframe &keyframe)
             state_->slamResetRequested_ = true;
             return;
         }
-        else if (keyframe.keyframeId_ < 10 && newKeyframe->numKeypoints3d_ < 3)
+
+        if (keyframe.keyframeId_ < 10 && newKeyframe->numKeypoints3d_ < 3)
         {
             std::cout << "- [Mapper]: Reset Requested - Num 3D kps:" << newKeyframe->numKeypoints3d_ << std::endl;
             state_->slamResetRequested_ = true;
@@ -41,7 +40,6 @@ void Mapper::processNewKeyframe(const Keyframe &keyframe)
     // Update the map points and the covisible graph between keyframes
     mapManager_->updateFrameCovisibility(*newKeyframe);
 
-    // Dirty but useful for visualization
     currFrame_->covisibleKeyframeIds_ = newKeyframe->covisibleKeyframeIds_;
 
     if (keyframe.keyframeId_ > 0 && !timedOperationHasTimedOut())
@@ -148,10 +146,6 @@ void Mapper::triangulateTemporal(Frame &frame)
 
     if (keypoints.empty())
     {
-        if (state_->debug_)
-        {
-            std::cout << "\n \t >>> No kps to temporal triangulate...\n";
-        }
         return;
     }
 
@@ -269,6 +263,7 @@ void Mapper::triangulateTemporal(Frame &frame)
             {
                 mapManager_->removeMapPointObs(keyframeKeypoint.keypointId_, frame.keyframeId_);
             }
+
             continue;
         }
 
@@ -284,6 +279,7 @@ void Mapper::triangulateTemporal(Frame &frame)
             {
                 mapManager_->removeMapPointObs(keyframeKeypoint.keypointId_, frame.keyframeId_);
             }
+
             continue;
         }
 
@@ -293,11 +289,6 @@ void Mapper::triangulateTemporal(Frame &frame)
 
         good++;
     }
-
-    if (state_->debug_)
-    {
-        std::cout << "\n \t >>> Temporal Mapping : " << good << " 3D map points out of " << candidates << " kps !\n";
-    }
 }
 
 bool Mapper::matchingToLocalMap(Frame &frame)
@@ -305,10 +296,10 @@ bool Mapper::matchingToLocalMap(Frame &frame)
     // Maximum number of map points to track
     const size_t maxNumLocalMapPoints = state_->frameMaxNumKeypoints_ * 10;
 
-    // If room for more keypoints, get local map of oldest co-keyframe and add it to set of map points to search for
+    // get local map of oldest co-keyframe and add it to set of map points to search for
     auto covMap = frame.getCovisibleKeyframeMap();
 
-    if (frame.localMapPointIds_.size() < maxNumLocalMapPoints)
+    if (covMap.size() > 0 && frame.localMapPointIds_.size() < maxNumLocalMapPoints)
     {
         int keyframeId = covMap.begin()->first;
         auto keyframe = mapManager_->getKeyframe(keyframeId);
@@ -368,18 +359,11 @@ bool Mapper::matchingToLocalMap(Frame &frame)
 
     size_t numMatches = mapPrevIdNewId.size();
 
-    if (state_->debug_)
-    {
-        std::cout << "\n \t>>> matchToLocalMap() --> Match To Local Map found #" << numMatches << " matches \n";
-    }
-
-    // Return if no matches
     if (numMatches == 0)
     {
         return false;
     }
 
-    // Merge in a thread to avoid waiting for BA to finish
     mergeMatches(frame, mapPrevIdNewId);
 
     return true;
@@ -387,18 +371,12 @@ bool Mapper::matchingToLocalMap(Frame &frame)
 
 void Mapper::mergeMatches(const Frame &frame, const std::map<int, int> &mapOfKeypointIdsAndMapPointIds)
 {
-    // Merge the matches
     for (const auto &ids: mapOfKeypointIdsAndMapPointIds)
     {
         int prevMapPointId = ids.first;
         int newMapPointId = ids.second;
 
         mapManager_->mergeMapPoints(prevMapPointId, newMapPointId);
-    }
-
-    if (state_->debug_)
-    {
-        std::cout << "\n >>> matchToLocalMap() / mergeMatches() --> Number of merges : " << mapOfKeypointIdsAndMapPointIds.size() << "\n";
     }
 }
 
