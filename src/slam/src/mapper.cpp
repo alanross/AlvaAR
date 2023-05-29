@@ -7,7 +7,7 @@ Mapper::Mapper(std::shared_ptr<State> state, std::shared_ptr<MapManager> mapMana
 {
 }
 
-void Mapper::addNewKeyframe(const Keyframe &keyframe)
+void Mapper::processNewKeyframe(const Keyframe &keyframe)
 {
     timedOperationStart();
 

@@ -34,7 +34,7 @@ void VisualFrontend::track(cv::Mat &image, double timestamp)
         if (!state_->slamResetRequested_ && state_->slamReadyForInit_)
         {
             Keyframe kf(currFrame_->keyframeId_, image);
-            mapper_->addNewKeyframe(kf);
+            mapper_->processNewKeyframe(kf);
         }
     }
 }

@@ -20,13 +20,6 @@ struct Keyframe
     Keyframe(int keyframeId, const cv::Mat &imageRaw) : keyframeId_(keyframeId), imageRaw_(imageRaw.clone())
     {}
 
-    void displayInfo()
-    {
-        std::cout << "\n\n Keyframe id #" << keyframeId_;
-        std::cout << " - image size : " << image_.size;
-        std::cout << " - pyramid size : " << imagePyramid_.size() << "\n\n";
-    }
-
     void releaseImages()
     {
         image_.release();
@@ -47,7 +40,7 @@ public:
 
     Mapper(std::shared_ptr<State> state, std::shared_ptr<MapManager> mapManager, std::shared_ptr<Frame> frame);
 
-    void addNewKeyframe(const Keyframe &keyframe);
+    void processNewKeyframe(const Keyframe &keyframe);
 
 private:
     std::map<int, int> matchToMap(const Frame &frame, const float maxProjectionError, const float distRatio, std::unordered_set<int> &localMapPointIds);
