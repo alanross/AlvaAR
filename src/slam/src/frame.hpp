@@ -135,8 +135,6 @@ public:
 
     bool isInImage(const cv::Point2f &point) const;
 
-    void displayFrameInfo();
-
     void reset();
 
     // For using frame in ordered containers

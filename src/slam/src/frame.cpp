@@ -467,16 +467,6 @@ bool Frame::isInImage(const cv::Point2f &point) const
     return (point.x >= 0 && point.y >= 0 && point.x < cameraCalibration_->imgWidth_ && point.y < cameraCalibration_->imgHeight_);
 }
 
-void Frame::displayFrameInfo()
-{
-    std::cout << "\n************************************";
-    std::cout << "\nFrame #" << id_ << " (keyframe #" << keyframeId_ << ") info:\n";
-    std::cout << "\n> Nb kps all (2d / 3d) : " << numKeypoints_ << " (" << numKeypoints2d_ << " / " << numKeypoints3d_ << ")";
-    std::cout << "\n> Nb covisible kfs : " << covisibleKeyframeIds_.size();
-    std::cout << "\n twc : " << Twc_.translation().transpose();
-    std::cout << "\n************************************\n\n";
-}
-
 void Frame::reset()
 {
     id_ = -1;
