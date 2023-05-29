@@ -88,7 +88,7 @@ void Mapper::optimize(const std::shared_ptr<Frame> &keyframe)
                 keyframe->removeCovisibleKeyframe(keyframeId);
                 continue;
             }
-            else if ((int) keyframe->numKeypoints3d_ < state_->localBAMinNumCommonKeypointsObservations_ / 2)
+            else if ((int) keyframe->numKeypoints3d_ < state_->baMinNumCommonKeypointsObservations_ / 2)
             {
                 mapManager_->removeKeyframe(keyframeId);
                 continue;

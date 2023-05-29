@@ -3,10 +3,10 @@
 
 void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
 {
-    const float chi2errThreshold = state_->baRobustThreshold_;
-    const bool inverseDepthEnabled = state_->inverseDepthEnabled_;
-    const bool applyL2AfterRobust = state_->applyL2AfterRobust_;
-    const int minCovScore = state_->localBAMinNumCommonKeypointsObservations_;
+    const float chi2errThreshold = state_->robustCostThreshold_;
+    const bool applyL2AfterRobust = state_->robustCostRefineWithL2_;
+    const bool inverseDepthEnabled = state_->baInverseDepthEnabled_;
+    const int minCovScore = state_->baMinNumCommonKeypointsObservations_;
 
     // ================================================================== 1. Setup BA Problem
 

@@ -696,9 +696,9 @@ bool VisualFrontend::computePose()
             vwpts,
             Twc,
             maxIterations,
-            state_->baRobustThreshold_,
+            state_->robustCostThreshold_,
             useRobust,
-            state_->applyL2AfterRobust_,
+            state_->robustCostRefineWithL2_,
             currFrame_->cameraCalibration_->fx_,
             currFrame_->cameraCalibration_->fy_,
             currFrame_->cameraCalibration_->cx_,
@@ -824,7 +824,7 @@ bool VisualFrontend::checkReadyForInit()
 
     if (avgRotParallax < state_->minAvgRotationParallax_)
     {
-        std::cout << "- [Visual-Front-End]: Can't compute 5-pt Essential matrix. Not enough parallax (\" << avgRotParallax << \" px)\n";
+        std::cout << "- [Visual-Front-End]: Can't compute 5-pt Essential matrix. Not enough parallax " << avgRotParallax << " px)\n";
         return false;
     }
 

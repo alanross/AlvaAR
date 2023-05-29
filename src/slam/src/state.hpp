@@ -34,9 +34,6 @@ public:
     bool slamReadyForInit_ = false;
     bool slamResetRequested_ = false;
 
-    // Number of common observations required for opt. a keyframe in localBA
-    int localBAMinNumCommonKeypointsObservations_ = 25;
-
     float minAvgRotationParallax_ = 40.0;
 
     int frameMaxNumKeypoints_;
@@ -73,11 +70,11 @@ public:
     int multiViewRansacNumIterations_ = 100;
 
     bool p3pEnabled_ = true;
-    bool inverseDepthEnabled_ = true; //remove?
 
     // Bundle Adjustment Parameters – mostly related to Ceres options
-    float baRobustThreshold_ = 5.9915;
+    bool baInverseDepthEnabled_ = true;
+    int baMinNumCommonKeypointsObservations_ = 25;
 
-    // Apply L2 optimisation to refine the results from robust cost function
-    bool applyL2AfterRobust_ = true;
+    bool robustCostRefineWithL2_ = true;
+    float robustCostThreshold_ = 5.9915;
 };
