@@ -8,10 +8,14 @@ Mapper::Mapper(std::shared_ptr<State> state, std::shared_ptr<MapManager> mapMana
 
 void Mapper::processNewKeyframe(const Keyframe &keyframe)
 {
-    timedOperationStart();
-
     std::shared_ptr<Frame> newKeyframe = mapManager_->getKeyframe(keyframe.keyframeId_);
     assert(newKeyframe);
+
+    // just keep the last 30 keyframes in our map
+    if (keyframe.keyframeId_ > 30)
+    {
+        mapManager_->removeKeyframe(keyframe.keyframeId_ - 30);
+    }
 
     // Triangulate temporal
     if (newKeyframe->keyframeId_ > 0 && newKeyframe->numKeypoints2d_ > 0)
@@ -42,7 +46,7 @@ void Mapper::processNewKeyframe(const Keyframe &keyframe)
 
     currFrame_->covisibleKeyframeIds_ = newKeyframe->covisibleKeyframeIds_;
 
-    if (keyframe.keyframeId_ > 0 && !timedOperationHasTimedOut())
+    if (keyframe.keyframeId_ > 0)
     {
         matchingToLocalMap(*newKeyframe);
     }
@@ -53,9 +57,6 @@ void Mapper::processNewKeyframe(const Keyframe &keyframe)
 
 void Mapper::optimize(const std::shared_ptr<Frame> &keyframe)
 {
-    // removing this will cause time of optimize to be counted as if being part of processNewKeyframe
-    timedOperationStart();
-
     // apply local BA
     if (keyframe->keyframeId_ >= 2 && keyframe->numKeypoints3d_ != 0)
     {
@@ -71,7 +72,7 @@ void Mapper::optimize(const std::shared_ptr<Frame> &keyframe)
         {
             int keyframeId = it->first;
 
-            if (timedOperationHasTimedOut() || keyframeId == 0)
+            if (keyframeId == 0)
             {
                 break;
             }
@@ -120,11 +121,6 @@ void Mapper::optimize(const std::shared_ptr<Frame> &keyframe)
                 }
 
                 numTotal++;
-
-                if (timedOperationHasTimedOut())
-                {
-                    break;
-                }
             }
 
             float ratio = (float) numGoodObservations / (float) numTotal;
@@ -303,16 +299,10 @@ bool Mapper::matchingToLocalMap(Frame &frame)
     {
         int keyframeId = covMap.begin()->first;
         auto keyframe = mapManager_->getKeyframe(keyframeId);
-        while (keyframe == nullptr && keyframeId > 0 && !timedOperationHasTimedOut())
+        while (keyframe == nullptr && keyframeId > 0)
         {
             keyframeId--;
             keyframe = mapManager_->getKeyframe(keyframeId);
-        }
-
-        // Skip if no time
-        if (timedOperationHasTimedOut())
-        {
-            return false;
         }
 
         if (keyframe != nullptr)
@@ -324,16 +314,10 @@ bool Mapper::matchingToLocalMap(Frame &frame)
         if (keyframe->keyframeId_ > 0 && frame.localMapPointIds_.size() < 0.5 * maxNumLocalMapPoints)
         {
             keyframe = mapManager_->getKeyframe(keyframe->keyframeId_);
-            while (keyframe == nullptr && keyframeId > 0 && !timedOperationHasTimedOut())
+            while (keyframe == nullptr && keyframeId > 0)
             {
                 keyframeId--;
                 keyframe = mapManager_->getKeyframe(keyframeId);
-            }
-
-            // Skip if no time
-            if (timedOperationHasTimedOut())
-            {
-                return false;
             }
 
             if (keyframe != nullptr)
@@ -341,17 +325,6 @@ bool Mapper::matchingToLocalMap(Frame &frame)
                 frame.localMapPointIds_.insert(keyframe->localMapPointIds_.begin(), keyframe->localMapPointIds_.end());
             }
         }
-    }
-
-    // Skip if no time
-    if (timedOperationHasTimedOut())
-    {
-        return false;
-    }
-
-    if (state_->debug_)
-    {
-        std::cout << "\n \t>>> matchToLocalMap() --> Number of local map points selected : " << frame.localMapPointIds_.size() << "\n";
     }
 
     // Track local map
@@ -418,11 +391,6 @@ std::map<int, int> Mapper::matchToMap(const Frame &frame, const float maxProject
     // Go through all map point from the local map
     for (const int mapPointId: localMapPointIds)
     {
-        if (timedOperationHasTimedOut())
-        {
-            break;
-        }
-
         if (frame.isObservingKeypoint(mapPointId))
         {
             continue;
@@ -619,17 +587,4 @@ std::map<int, int> Mapper::matchToMap(const Frame &frame, const float maxProject
     }
 
     return mapPrevIdNewId;
-}
-
-void Mapper::timedOperationStart()
-{
-    timedOperationStartTime_ = std::chrono::high_resolution_clock::now();
-}
-
-bool Mapper::timedOperationHasTimedOut()
-{
-    auto now = std::chrono::high_resolution_clock::now();
-    auto dif = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - timedOperationStartTime_).count();
-
-    return (dif > 8);
 }

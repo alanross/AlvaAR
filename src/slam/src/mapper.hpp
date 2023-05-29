@@ -28,7 +28,6 @@ struct Keyframe
     }
 };
 
-// Handles Keyframe processing (i.e. triangulation, local map tracking, BA, LC)
 class Mapper
 {
 
@@ -53,14 +52,8 @@ private:
 
     void triangulateTemporal(Frame &frame);
 
-    void timedOperationStart();
-
-    bool timedOperationHasTimedOut();
-
     std::shared_ptr<State> state_;
     std::shared_ptr<Frame> currFrame_;
     std::shared_ptr<MapManager> mapManager_;
     std::unique_ptr<Optimizer> optimizer_;
-
-    std::chrono::high_resolution_clock::time_point timedOperationStartTime_;
 };
