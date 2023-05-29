@@ -135,29 +135,24 @@ void Mapper::optimize(const std::shared_ptr<Frame> &keyframe)
 
 void Mapper::triangulateTemporal(Frame &frame)
 {
-    // Get new keyframe kps / pose
     std::vector<Keypoint> keypoints = frame.getKeypoints2d();
-
-    Sophus::SE3d Twcj = frame.getTwc();
 
     if (keypoints.empty())
     {
         return;
     }
 
+    Sophus::SE3d Twcj = frame.getTwc();
+
     // Setup triangulation for OpenGV-based mapping
     size_t numKeypoints = keypoints.size();
-
-    std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > lBvs, rBvs;
-    lBvs.reserve(numKeypoints);
-    rBvs.reserve(numKeypoints);
 
     // Init a keyframe object that will point to the prev keyframe to use for triangulation
     std::shared_ptr<Frame> keyframe;
     keyframe = std::make_shared<Frame>();
     keyframe->keyframeId_ = -1;
 
-    // Relative motions between new keyframe and prev. keyframes
+    // Relative motions between new keyframe and previous keyframes
     int relKeyframeId = -1;
     Sophus::SE3d Tcicj;
     Sophus::SE3d Tcjci;
@@ -180,10 +175,10 @@ void Mapper::triangulateTemporal(Frame &frame)
     wPoints.reserve(numKeypoints);
     mapPointIds.reserve(numKeypoints);
 
-    // We go through all the 2D kps in new keyframe
+    // go through all 2D kps in new keyframe
     for (size_t i = 0; i < numKeypoints; i++)
     {
-        // Get the related map point and check if it is ready to be triangulated
+        // Get related map point and check if it is ready to be triangulated
         std::shared_ptr<MapPoint> mapPoint = mapManager_->getMapPoint(keypoints.at(i).keypointId_);
 
         if (mapPoint == nullptr)
@@ -293,11 +288,11 @@ bool Mapper::matchingToLocalMap(Frame &frame)
     const size_t maxNumLocalMapPoints = state_->frameMaxNumKeypoints_ * 10;
 
     // get local map of oldest co-keyframe and add it to set of map points to search for
-    auto covMap = frame.getCovisibleKeyframeMap();
+    auto covisibleKeyframeMap = frame.getCovisibleKeyframeMap();
 
-    if (covMap.size() > 0 && frame.localMapPointIds_.size() < maxNumLocalMapPoints)
+    if (!covisibleKeyframeMap.empty() && frame.localMapPointIds_.size() < maxNumLocalMapPoints)
     {
-        int keyframeId = covMap.begin()->first;
+        int keyframeId = covisibleKeyframeMap.begin()->first;
         auto keyframe = mapManager_->getKeyframe(keyframeId);
         while (keyframe == nullptr && keyframeId > 0)
         {
@@ -310,7 +305,7 @@ bool Mapper::matchingToLocalMap(Frame &frame)
             frame.localMapPointIds_.insert(keyframe->localMapPointIds_.begin(), keyframe->localMapPointIds_.end());
         }
 
-        // If still far not enough, go for another round
+        // go for another round
         if (keyframe->keyframeId_ > 0 && frame.localMapPointIds_.size() < 0.5 * maxNumLocalMapPoints)
         {
             keyframe = mapManager_->getKeyframe(keyframe->keyframeId_);
@@ -330,27 +325,22 @@ bool Mapper::matchingToLocalMap(Frame &frame)
     // Track local map
     std::map<int, int> mapPrevIdNewId = matchToMap(frame, state_->mapMaxProjectionPxDistance_, state_->mapMaxDescriptorDistance_, frame.localMapPointIds_);
 
-    size_t numMatches = mapPrevIdNewId.size();
-
-    if (numMatches == 0)
+    // no matches
+    if (mapPrevIdNewId.empty())
     {
         return false;
     }
 
-    mergeMatches(frame, mapPrevIdNewId);
-
-    return true;
-}
-
-void Mapper::mergeMatches(const Frame &frame, const std::map<int, int> &mapOfKeypointIdsAndMapPointIds)
-{
-    for (const auto &ids: mapOfKeypointIdsAndMapPointIds)
+    // Merge matches
+    for (const auto &ids: mapPrevIdNewId)
     {
-        int prevMapPointId = ids.first;
+        int oldMapPointId = ids.first;
         int newMapPointId = ids.second;
 
-        mapManager_->mergeMapPoints(prevMapPointId, newMapPointId);
+        mapManager_->mergeMapPoints(oldMapPointId, newMapPointId);
     }
+
+    return true;
 }
 
 std::map<int, int> Mapper::matchToMap(const Frame &frame, const float maxProjectionError, const float distRatio, std::unordered_set<int> &localMapPointIds)

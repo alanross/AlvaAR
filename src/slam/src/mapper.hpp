@@ -48,8 +48,6 @@ private:
 
     void optimize(const std::shared_ptr<Frame> &keyframe);
 
-    void mergeMatches(const Frame &frame, const std::map<int, int> &mapOfKeypointIdsAndMapPointIds);
-
     void triangulateTemporal(Frame &frame);
 
     std::shared_ptr<State> state_;
