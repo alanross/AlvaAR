@@ -3,33 +3,27 @@
 
 void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
 {
+    const float chi2errThreshold = state_->baRobustThreshold_;
+    const bool inverseDepthEnabled = state_->inverseDepthEnabled_;
+    const bool applyL2AfterRobust = state_->applyL2AfterRobust_;
+    const int minCovScore = state_->localBAMinNumCommonKeypointsObservations_;
+
     // ================================================================== 1. Setup BA Problem
 
     ceres::Problem problem;
     ceres::LossFunctionWrapper *lossFunction;
-
-    // Chi2 thresh.
-    const float threshold = state_->baRobustThreshold_;
-
-    lossFunction = new ceres::LossFunctionWrapper(new ceres::HuberLoss(std::sqrt(threshold)), ceres::TAKE_OWNERSHIP);
+    lossFunction = new ceres::LossFunctionWrapper(new ceres::HuberLoss(std::sqrt(chi2errThreshold)), ceres::TAKE_OWNERSHIP);
 
     if (!useRobustCost)
     {
         lossFunction->Reset(nullptr, ceres::TAKE_OWNERSHIP);
     }
 
-    // Thresh. score for optimizing / fixing a keyframe in BA (cov score with new keyframe)
-    int minCovScore = state_->localBAMinNumCommonKeypointsObservations_;
-
-    // Do not optimize if tracking is poor (hopefully will get better soon!)
+    // Do not optimize if tracking is poor
     if ((int) newFrame.numKeypoints3d_ < minCovScore)
     {
         return;
     }
-
-    size_t nmincstkfs = 2;
-
-    size_t numMono = 0;
 
     auto ordering = new ceres::ParameterBlockOrdering;
 
@@ -63,11 +57,6 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
     std::unordered_set<int> set_kfids2opt;
     std::unordered_set<int> set_cstkfids;
 
-    if (state_->debug_)
-    {
-        std::cout << "\n >>> Local BA : new keyframe is #" << newFrame.keyframeId_ << " -- with covisible graph of size : " << covisibleKeyframeMap.size();
-    }
-
     bool all_cst = false;
 
     // Go through the covisibility keyframe map
@@ -75,7 +64,6 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
 
     for (auto it = covisibleKeyframeMap.rbegin(); it != covisibleKeyframeMap.rend(); it++)
     {
-
         int kfid = it->first;
         int covscore = it->second;
 
@@ -137,7 +125,7 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
 
         map_local_plms.emplace(lmid, plm);
 
-        if (!state_->inverseDepthEnabled_)
+        if (!inverseDepthEnabled)
         {
             map_id_pointspar_.emplace(lmid, PointXYZParametersBlock(lmid, plm->getPoint()));
 
@@ -193,7 +181,7 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
                 continue;
             }
 
-            if (state_->inverseDepthEnabled_)
+            if (inverseDepthEnabled)
             {
                 if (kfanchid < 0)
                 {
@@ -206,8 +194,6 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
                     problem.AddParameterBlock(map_id_invptspar_.at(lmid).values(), 1);
                     ordering->AddElementToGroup(map_id_invptspar_.at(lmid).values(), 0);
 
-                    numMono++;
-
                     continue;
                 }
             }
@@ -216,7 +202,7 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
             ceres::ResidualBlockId rid;
 
             // Add a visual factor between keyframe-map point nodes
-            if (state_->inverseDepthEnabled_)
+            if (inverseDepthEnabled)
             {
                 const float scale = 1.0;
 
@@ -240,8 +226,6 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
             }
 
             vreprojerr_kfid_lmid.push_back(std::make_pair(f, std::make_pair(rid, std::make_pair(kfid, kp.keypointId_))));
-
-            numMono++;
         }
     }
 
@@ -249,6 +233,7 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
     size_t nbcstkfs = set_cstkfids.size();
 
     // At least two fixed keyframe
+    size_t nmincstkfs = 2;
     if (nbcstkfs < nmincstkfs)
     {
         for (auto it = map_local_pkfs.begin(); nbcstkfs < nmincstkfs && it != map_local_pkfs.end(); it++)
@@ -256,30 +241,6 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
             problem.SetParameterBlockConstant(map_id_posespar_.at(it->first).values());
             set_cstkfids.insert(it->first);
             nbcstkfs++;
-        }
-    }
-
-    size_t nbkfstot = map_local_pkfs.size();
-    size_t nbkfs2opt = nbkfstot - nbcstkfs;
-    size_t nblms2opt = map_local_plms.size();
-
-    if (state_->debug_)
-    {
-        std::cout << "\n\n >>> LocalBA problem setup!";
-        std::cout << "\n >>> Kfs added (opt / tot) : " << nbkfs2opt << " / " << nbkfstot;
-        std::cout << "\n >>> map points added : " << nblms2opt;
-        std::cout << "\n >>> Measurements added : " << numMono;
-
-        std::cout << "\n\n >>> keyframes added : ";
-        for (const auto &id_pkf: map_local_pkfs)
-        {
-            std::cout << " keyframe #" << id_pkf.first << " (cst : " << set_cstkfids.count(id_pkf.first) << "), ";
-        }
-
-        std::cout << "\n\n >>> keyframes in cov map : ";
-        for (const auto &id_score: covisibleKeyframeMap)
-        {
-            std::cout << " keyframe #" << id_score.first << " (cov score : " << id_score.second << "), ";
         }
     }
 
@@ -292,21 +253,15 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
     options.num_threads = 1;
     options.max_num_iterations = 5;
     options.function_tolerance = 0.001;
-    options.max_solver_time_in_seconds = 0.2;
-    options.minimizer_progress_to_stdout = state_->debug_;
-    options.max_solver_time_in_seconds *= 2.0; //set only if not forcing realtime
+    options.max_solver_time_in_seconds = 0.01; //10ms
+    options.minimizer_progress_to_stdout = false;
 
     ceres::Solver::Summary summary;
     ceres::Solve(options, &problem, &summary);
 
-    if (state_->debug_)
-    {
-        std::cout << summary.FullReport() << std::endl;
-    }
-
     // ================================================================== 3. Remove outliers
 
-    size_t numBadObservationsMono = 0;
+    size_t numBadObservations = 0;
 
     std::vector<std::pair<int, int>> badKeyframeLandmarkIds;
     badKeyframeLandmarkIds.reserve(vreprojerr_kfid_lmid.size() / 10);
@@ -316,22 +271,22 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
         bool bigChi2 = true;
         bool depthPositive = true;
 
-        if (state_->inverseDepthEnabled_)
+        if (inverseDepthEnabled)
         {
             auto *err = static_cast<DirectSE3::ReprojectionErrorKSE3AnchInvDepth *>(it->first);
-            bigChi2 = err->chi2err_ > threshold;
+            bigChi2 = err->chi2err_ > chi2errThreshold;
             depthPositive = err->isDepthPositive_;
         }
         else
         {
             auto *err = static_cast<DirectSE3::ReprojectionErrorKSE3XYZ *>(it->first);
-            bigChi2 = err->chi2err_ > threshold;
+            bigChi2 = err->chi2err_ > chi2errThreshold;
             depthPositive = err->isDepthPositive_;
         }
 
         if (bigChi2 || !depthPositive)
         {
-            if (state_->applyL2AfterRobust_)
+            if (applyL2AfterRobust)
             {
                 auto rid = it->second.first;
                 problem.RemoveResidualBlock(rid);
@@ -341,7 +296,7 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
             int kfid = it->second.second.first;
             badKeyframeLandmarkIds.push_back(std::pair<int, int>(kfid, lmid));
             set_badlmids.insert(lmid);
-            numBadObservationsMono++;
+            numBadObservations++;
 
             it = vreprojerr_kfid_lmid.erase(it);
         }
@@ -351,32 +306,25 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
         }
     }
 
-    size_t numBadObservations = numBadObservationsMono;
-
     // ================================================================== 4. Refine BA Solution
 
     bool l2OptimisationDone = false;
 
     // Refine without robust cost if required
-    if (state_->applyL2AfterRobust_ && useRobustCost && numBadObservations > 0)
+    if (applyL2AfterRobust && useRobustCost && numBadObservations > 0)
     {
         if (!vreprojerr_kfid_lmid.empty() && !vright_reprojerr_kfid_lmid.empty())
         {
             lossFunction->Reset(nullptr, ceres::TAKE_OWNERSHIP);
         }
 
-        options.max_num_iterations = 10;
+        options.max_num_iterations = 5;
         options.function_tolerance = 0.001;
-        options.max_solver_time_in_seconds /= 2.0;
+        options.max_solver_time_in_seconds = 0.001; //1ms
 
         ceres::Solve(options, &problem, &summary);
 
         l2OptimisationDone = true;
-
-        if (state_->debug_)
-        {
-            std::cout << summary.FullReport() << std::endl;
-        }
     }
 
     // ================================================================== 5. Remove outliers
@@ -389,16 +337,16 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
             bool bigChi2 = true;
             bool depthPositive = true;
 
-            if (state_->inverseDepthEnabled_)
+            if (inverseDepthEnabled)
             {
                 auto *err = static_cast<DirectSE3::ReprojectionErrorKSE3AnchInvDepth *>(it->first);
-                bigChi2 = err->chi2err_ > threshold;
+                bigChi2 = err->chi2err_ > chi2errThreshold;
                 depthPositive = err->isDepthPositive_;
             }
             else
             {
                 auto *err = static_cast<DirectSE3::ReprojectionErrorKSE3XYZ *>(it->first);
-                bigChi2 = err->chi2err_ > threshold;
+                bigChi2 = err->chi2err_ > chi2errThreshold;
                 depthPositive = err->isDepthPositive_;
             }
 
@@ -408,7 +356,6 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
                 int keyframeId = it->second.second.first;
                 badKeyframeLandmarkIds.push_back(std::pair<int, int>(keyframeId, mapPointId));
                 set_badlmids.insert(mapPointId);
-                numBadObservationsMono++;
 
                 it = vreprojerr_kfid_lmid.erase(it);
             }
@@ -497,7 +444,7 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
             }
         }
 
-        if (state_->inverseDepthEnabled_)
+        if (inverseDepthEnabled)
         {
             auto invptit = map_id_invptspar_.find(lmId);
 
@@ -589,8 +536,4 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
             }
         }
     }
-
-    numBadObservations = numBadObservationsMono;
-
-    //std::cout << "- [System]: Bad obs: " << numBadObservations << ", Removed map points: " << numBadLandmarks << std::endl;
 }
