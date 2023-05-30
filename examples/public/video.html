@@ -123,11 +123,10 @@
 
         const $cam = document.getElementById( 'renderer-cam' );
         const $map = document.getElementById( 'renderer-map' );
-        const $canvas = document.getElementById( 'renderer-video' );
-        const ctx = $canvas.getContext( '2d' );
+        const ctx = document.getElementById( 'renderer-video' ).getContext( '2d' );
 
-        $canvas.width = media.width;
-        $canvas.height = media.height;
+        ctx.canvas.width = media.width;
+        ctx.canvas.height = media.height;
 
         const mapRenderer = new ARSimpleMap( $map, media.width, media.height );
         const camRenderer = new ARSimpleView( $cam, media.width, media.height, mapRenderer );
@@ -143,6 +142,7 @@
         {
             media.el.load();
             media.el.play();
+            camRenderer.reset();
         };
 
         onFrame( () =>

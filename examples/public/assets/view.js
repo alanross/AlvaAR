@@ -4,7 +4,7 @@ import { AlvaARConnectorTHREE } from './alva_ar_three.js'
 
 class ARCamView
 {
-    constructor( container, width, height, x = 0, y = 0, z = -1, scale = 0.1 )
+    constructor( container, width, height, x = 0, y = 0, z = -10, scale = 1.0)
     {
         this.applyPose = AlvaARConnectorTHREE.Initialize( THREE );
 
@@ -80,7 +80,7 @@ class ARCamIMUView
         );
 
         this.ground.rotation.x = Math.PI / 2; // 90 deg
-        this.ground.position.y = -2;
+        this.ground.position.y = -10;
 
         this.scene = new THREE.Scene();
         this.scene.add( new THREE.AmbientLight( 0x808080 ) );
@@ -115,7 +115,7 @@ class ARCamIMUView
         this.scene.children.forEach( obj => obj.visible = false );
     }
 
-    addObjectAt( x, y, scale = 0.1 )
+    addObjectAt( x, y, scale = 1.0 )
     {
         const el = this.renderer.domElement;
 
@@ -209,15 +209,24 @@ class ARSimpleView
         cube.position.z = scale * 0.5;
 
         plane.add( cube );
+        plane.custom = true;
 
         this.applyPose( pose, plane.quaternion, plane.position );
         this.scene.add( plane );
 
         if( this.mapView )
         {
-            const clone = plane.clone();
+            this.mapView.scene.add( plane.clone() );
+        }
+    }
 
-            this.mapView.scene.add( clone );
+    reset()
+    {
+        this.scene.children.filter( o => o.custom ).forEach( o => this.scene.remove( o ) );
+
+        if( this.mapView )
+        {
+            this.mapView.scene.children.filter( o => o.custom ).forEach( o => this.mapView.scene.remove( o ) );
         }
     }
 }

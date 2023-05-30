@@ -858,11 +858,9 @@ bool VisualFrontend::checkReadyForInit()
         mapManager_->removeObsFromCurrFrameById(keypointIds.at(idx));
     }
 
-    // Arbitrary scale. Exploring good default values
+    //Normalize the translation scale.
     tkfc.normalize();
-    tkfc = tkfc.eval() * 0.25;
-    //tkfc = tkfc.eval() * 0.1;
-    //tkfc.z() = 0.0;
+    //tkfc = tkfc.eval() * 1.0;
 
     currFrame_->setTwc(Rkfc, tkfc);
 
