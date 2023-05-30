@@ -93,6 +93,11 @@ class Quaternion
             w: qaw * qbw - qax * qbx - qay * qby - qaz * qbz,
         }
     }
+
+    static dot( a, b )
+    {
+        return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+    }
 }
 
 class IMU
@@ -154,6 +159,8 @@ class IMU
 
     constructor()
     {
+        this.EPS = 0.000001;
+
         this.screenOrientation = null;
         this.screenOrientationAngle = 0;
 
@@ -171,7 +178,12 @@ class IMU
             const y = event.gamma * deg2rad;   // Y-axis (γ) horizontal tilt
             const z = event.alpha * deg2rad;   // Z-axis (α) compass direction
 
-            this.orientation = Quaternion.multiply( this.worldTransform, Quaternion.fromEuler( x, y, z, 'ZXY' ) );
+            const orientation = Quaternion.multiply( this.worldTransform, Quaternion.fromEuler( x, y, z, 'ZXY' ) );
+
+            if( 8 * (1 - Quaternion.dot( this.orientation, orientation )) > this.EPS )
+            {
+                this.orientation = orientation;
+            }
         }
 
         const handleDeviceMotion = ( event ) =>
