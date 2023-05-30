@@ -163,21 +163,6 @@ void MapManager::updateFrameCovisibility(Frame &frame)
     }
 }
 
-void MapManager::addKeypointsToFrame(const cv::Mat &image, const std::vector<cv::Point2f> &points, Frame &frame)
-{
-    // Add keypoints + create map points
-    size_t numPoints = points.size();
-    for (size_t i = 0; i < numPoints; i++)
-    {
-        // Add keypoint to current frame
-        frame.addKeypoint(points.at(i), numMapPointIds_);
-
-        // Create landmark with same id
-        cv::Scalar pixel = image.at<uchar>(points.at(i).y, points.at(i).x);
-        addMapPoint(pixel);
-    }
-}
-
 void MapManager::addKeypointsToFrame(const cv::Mat &image, const std::vector<cv::Point2f> &points, const std::vector<cv::Mat> &descriptors, Frame &frame)
 {
     // Add keypoints + create landmarks
@@ -440,41 +425,6 @@ void MapManager::updateMapPoint(const int mapPointId, const Eigen::Vector3d &wpt
     pointCloud_.at(mapPointId) = point;
 }
 
-void MapManager::addMapPointKeyframeObs(const int mapPointId, const int keyframeId)
-{
-    auto pkfit = mapKeyframes_.find(keyframeId);
-    auto plmit = mapMapPoints_.find(mapPointId);
-
-    if (pkfit == mapKeyframes_.end())
-    {
-        return;
-    }
-
-    if (plmit == mapMapPoints_.end())
-    {
-        return;
-    }
-
-    plmit->second->addObservedKeyframeId(keyframeId);
-
-    for (const auto &cokfid: plmit->second->getObservedKeyframeIds())
-    {
-        if (cokfid != keyframeId)
-        {
-            auto pcokfit = mapKeyframes_.find(cokfid);
-            if (pcokfit != mapKeyframes_.end())
-            {
-                pcokfit->second->addCovisibleKeyframe(keyframeId);
-                pkfit->second->addCovisibleKeyframe(cokfid);
-            }
-            else
-            {
-                plmit->second->removeObservedKeyframeId(cokfid);
-            }
-        }
-    }
-}
-
 void MapManager::mergeMapPoints(const int prvMapPointId, const int newMapPointId)
 {
     // 1. Get Kf obs + descs from prev map point
@@ -687,25 +637,6 @@ void MapManager::removeMapPointObs(const int mapPointId, const int keyframeId)
             {
                 pkfit->second->decreaseCovisibleKeyframe(cokfid);
                 pcokfit->second->decreaseCovisibleKeyframe(keyframeId);
-            }
-        }
-    }
-}
-
-void MapManager::removeMapPointObs(MapPoint &mapPoint, Frame &frame)
-{
-    frame.removeKeypointById(mapPoint.mapPointId_);
-    mapPoint.removeObservedKeyframeId(frame.keyframeId_);
-
-    for (const auto &cokfid: mapPoint.getObservedKeyframeIds())
-    {
-        if (cokfid != frame.keyframeId_)
-        {
-            auto pcokfit = mapKeyframes_.find(cokfid);
-            if (pcokfit != mapKeyframes_.end())
-            {
-                frame.decreaseCovisibleKeyframe(cokfid);
-                pcokfit->second->decreaseCovisibleKeyframe(frame.keyframeId_);
             }
         }
     }

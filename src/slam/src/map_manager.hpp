@@ -43,9 +43,6 @@ public:
     // Update a map point world position
     void updateMapPoint(const int mapPointId, const Eigen::Vector3d &wpt, const double keyframeAnchorInvDepth = -1.);
 
-    // Add a new keyframe obs to provided map point (mapPointId)
-    void addMapPointKeyframeObs(const int mapPointId, const int keyframeId);
-
     bool setMapPointObs(const int mapPointId);
 
     void updateFrameCovisibility(Frame &frame);
@@ -61,15 +58,11 @@ public:
     // Remove a keyframe obs from a map point
     void removeMapPointObs(const int mapPointId, const int keyframeId);
 
-    void removeMapPointObs(MapPoint &mapPoint, Frame &frame);
-
     // Remove a map point obs from cur Frame
     void removeObsFromCurrFrameById(const int mapPointId);
 
     // turns current frame into a keyframe. Keypoints extraction is performed and the related map points and the new keyframe are added to the map.
     void createKeyframe(const cv::Mat &image, const cv::Mat &imageRaw);
-
-    void addKeypointsToFrame(const cv::Mat &image, const std::vector<cv::Point2f> &points, Frame &frame);
 
     void addKeypointsToFrame(const cv::Mat &image, const std::vector<cv::Point2f> &points, const std::vector<cv::Mat> &descriptors, Frame &frame);
 
