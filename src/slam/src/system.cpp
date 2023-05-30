@@ -172,15 +172,13 @@ int System::processCameraPose(cv::Mat &image, double timestamp)
 
 cv::Mat System::processPlane(std::vector<Eigen::Vector3d> mapPoints, Sophus::SE3d Twc, int numIterations)
 {
-    cv::Mat planePose;
-
     const long numMapPoints = mapPoints.size();
 
     if (numMapPoints < 32)
     {
         std::cout << "- [System]: Too few points to detect plane: " << numMapPoints << std::endl;
 
-        return planePose;
+        return cv::Mat();
     }
 
     std::vector<cv::Mat> points(numMapPoints);
@@ -261,6 +259,13 @@ cv::Mat System::processPlane(std::vector<Eigen::Vector3d> mapPoints, Sophus::SE3
 
     const long numInliers = pointsInliers.size();
 
+    if (numInliers < 32)
+    {
+        std::cout << "- [System]: Too few inliers to detect plane: " << numInliers << std::endl;
+
+        return cv::Mat();
+    }
+
     // Recompute plane with all points inliers
     cv::Mat planeCoefficientsMatrix = cv::Mat(numInliers, 4, CV_32F);
     planeCoefficientsMatrix.col(3) = cv::Mat::ones(numInliers, 1, CV_32F);
@@ -318,6 +323,7 @@ cv::Mat System::processPlane(std::vector<Eigen::Vector3d> mapPoints, Sophus::SE3
     cv::Rodrigues((v * ang / sa), R1);
     cv::Rodrigues(up, R2);
 
+    cv::Mat planePose;
     planePose = cv::Mat::eye(4, 4, CV_32F);
     planePose.rowRange(0, 3).colRange(0, 3) = R1 * R2;      // rotation
     inliersOrigin.copyTo(planePose.col(3).rowRange(0, 3));  // translation
