@@ -13,7 +13,7 @@ public:
     {
     }
 
-    void localBA(Frame &newFrame, const bool useRobustCost);
+    void localBA(Frame &newFrame);
 
 private:
     std::shared_ptr<State> state_;

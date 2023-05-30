@@ -1,12 +1,19 @@
 #include "optimizer.hpp"
 #include "ceres_parametrization.hpp"
 
-void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
+void Optimizer::localBA(Frame &newFrame)
 {
+    const bool useRobustCost = true;
     const float chi2errThreshold = state_->robustCostThreshold_;
     const bool applyL2AfterRobust = state_->robustCostRefineWithL2_;
     const bool inverseDepthEnabled = state_->baInverseDepthEnabled_;
     const int minCovScore = state_->baMinNumCommonKeypointsObservations_;
+
+    // Do not optimize if tracking is poor
+    if ((int) newFrame.numKeypoints3d_ < minCovScore)
+    {
+        return;
+    }
 
     // ================================================================== 1. Setup BA Problem
 
@@ -19,12 +26,6 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
         lossFunction->Reset(nullptr, ceres::TAKE_OWNERSHIP);
     }
 
-    // Do not optimize if tracking is poor
-    if ((int) newFrame.numKeypoints3d_ < minCovScore)
-    {
-        return;
-    }
-
     auto ordering = new ceres::ParameterBlockOrdering;
 
     std::unordered_map<int, PoseParametersBlock> map_id_posespar_;
@@ -35,7 +36,8 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
     std::unordered_map<int, std::shared_ptr<Frame>> map_local_pkfs;
 
     // Storing the factors and their residuals block ids for fast accessing when checking for outliers
-    std::vector<std::pair<ceres::CostFunction *, std::pair<ceres::ResidualBlockId, std::pair<int, int>>>> vreprojerr_kfid_lmid, vright_reprojerr_kfid_lmid;
+    std::vector<std::pair<ceres::CostFunction *, std::pair<ceres::ResidualBlockId, std::pair<int, int>>>> vreprojerr_kfid_lmid;
+    std::vector<std::pair<ceres::CostFunction *, std::pair<ceres::ResidualBlockId, std::pair<int, int>>>> vright_reprojerr_kfid_lmid;
 
     // Add the cam calibration parameters
     auto cameraCalibration = newFrame.cameraCalibration_;
@@ -51,7 +53,7 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
     // Add the new keyframe to the map with max score
     covisibleKeyframeMap.emplace(newFrame.keyframeId_, newFrame.numKeypoints3d_);
 
-    // Keep track of map points no suited for BA for speed-up
+    // Keep track of map points not suited for BA for speed-up
     std::unordered_set<int> set_badlmids;
     std::unordered_set<int> set_lmids2opt;
     std::unordered_set<int> set_kfids2opt;
@@ -64,34 +66,34 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
 
     for (auto it = covisibleKeyframeMap.rbegin(); it != covisibleKeyframeMap.rend(); it++)
     {
-        int kfid = it->first;
-        int covscore = it->second;
+        int keyframeId = it->first;
+        int covScore = it->second;
 
-        if (kfid > newFrame.keyframeId_)
+        if (keyframeId > newFrame.keyframeId_)
         {
-            covscore = newFrame.numKeypoints_;
+            covScore = newFrame.numKeypoints_;
         }
 
-        auto pkf = mapManager_->getKeyframe(kfid);
+        auto pkf = mapManager_->getKeyframe(keyframeId);
 
         if (pkf == nullptr)
         {
-            newFrame.removeCovisibleKeyframe(kfid);
+            newFrame.removeCovisibleKeyframe(keyframeId);
             continue;
         }
 
         // Add every keyframe to BA problem
-        map_id_posespar_.emplace(kfid, PoseParametersBlock(kfid, pkf->getTwc()));
+        map_id_posespar_.emplace(keyframeId, PoseParametersBlock(keyframeId, pkf->getTwc()));
 
         ceres::LocalParameterization *local_parameterization = new SE3Parameterization();
 
-        problem.AddParameterBlock(map_id_posespar_.at(kfid).values(), 7, local_parameterization);
-        ordering->AddElementToGroup(map_id_posespar_.at(kfid).values(), 1);
+        problem.AddParameterBlock(map_id_posespar_.at(keyframeId).values(), 7, local_parameterization);
+        ordering->AddElementToGroup(map_id_posespar_.at(keyframeId).values(), 1);
 
         // For those to optimize, get their 3D map points for the others, set them as constant
-        if (covscore >= minCovScore && !all_cst && kfid > 0)
+        if (covScore >= minCovScore && !all_cst && keyframeId > 0)
         {
-            set_kfids2opt.insert(kfid);
+            set_kfids2opt.insert(keyframeId);
             for (const auto &kp: pkf->getKeypoints3d())
             {
                 set_lmids2opt.insert(kp.keypointId_);
@@ -99,12 +101,12 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
         }
         else
         {
-            set_cstkfids.insert(kfid);
-            problem.SetParameterBlockConstant(map_id_posespar_.at(kfid).values());
+            set_cstkfids.insert(keyframeId);
+            problem.SetParameterBlockConstant(map_id_posespar_.at(keyframeId).values());
             all_cst = true;
         }
 
-        map_local_pkfs.emplace(kfid, pkf);
+        map_local_pkfs.emplace(keyframeId, pkf);
     }
 
     // Go through the map points to optimize
@@ -308,9 +310,6 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
 
     // ================================================================== 4. Refine BA Solution
 
-    bool l2OptimisationDone = false;
-
-    // Refine without robust cost if required
     if (applyL2AfterRobust && useRobustCost && numBadObservations > 0)
     {
         if (!vreprojerr_kfid_lmid.empty() && !vright_reprojerr_kfid_lmid.empty())
@@ -324,14 +323,7 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
 
         ceres::Solve(options, &problem, &summary);
 
-        l2OptimisationDone = true;
-    }
-
-    // ================================================================== 5. Remove outliers
-
-    // Remove bad observations
-    if (l2OptimisationDone)
-    {
+        // Remove bad observations
         for (auto it = vreprojerr_kfid_lmid.begin(); it != vreprojerr_kfid_lmid.end();)
         {
             bool bigChi2 = true;
@@ -366,7 +358,7 @@ void Optimizer::localBA(Frame &newFrame, const bool useRobustCost)
         }
     }
 
-    // ================================================================== 6. Update State Parameters
+    // ================================================================== 5. Update State Parameters
 
     for (const auto &pair: badKeyframeLandmarkIds)
     {

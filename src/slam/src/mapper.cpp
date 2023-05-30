@@ -60,7 +60,7 @@ void Mapper::optimize(const std::shared_ptr<Frame> &keyframe)
     // apply local BA
     if (keyframe->keyframeId_ >= 2 && keyframe->numKeypoints3d_ != 0)
     {
-        optimizer_->localBA(*keyframe, true);
+        optimizer_->localBA(*keyframe);
     }
 
     // apply map filtering
