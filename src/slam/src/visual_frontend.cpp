@@ -51,8 +51,6 @@ bool VisualFrontend::process(cv::Mat &image, double timestamp)
 
     kltTrackingFromMotionPrior();
 
-    //epipolar2d2dOutlierFiltering();
-
     if (!state_->slamReadyForInit_)
     {
         if (currFrame_->numKeypoints2d_ < 50)
@@ -241,150 +239,6 @@ void VisualFrontend::kltTrackingFromMotionPrior()
         {
             std::cout << "- [Visual-Frontend]: FromMotionPrior - no prior : " << numGood << " out of " << numKeypoints << " kps tracked" << std::endl;
         }
-    }
-}
-
-void VisualFrontend::epipolar2d2dOutlierFiltering()
-{
-    auto keyframe = mapManager_->mapKeyframes_.at(currFrame_->keyframeId_);
-
-    if (keyframe == nullptr)
-    {
-        std::cerr << "- [Visual-Frontend]: OutlierFiltering - ERROR! Previous Kf does not exist yet (epipolar2d2d()).\n";
-        exit(-1);
-    }
-
-    // Get current frame number kps
-    size_t numKeypoints = currFrame_->numKeypoints_;
-
-    if (numKeypoints < 8)
-    {
-        if (state_->debug_)
-        {
-            std::cout << "- [Visual-Frontend]: OutlierFiltering - Not enough kps to compute Essential Matrix" << std::endl;
-        }
-
-        return;
-    }
-
-    // Setup Essential Matrix computation for OpenGV-based filtering
-    std::vector<int> keypointIds;
-    std::vector<int> outliersIndices;
-    keypointIds.reserve(numKeypoints);
-    outliersIndices.reserve(numKeypoints);
-
-    std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > vkfbvs;
-    std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > vcurbvs;
-    vkfbvs.reserve(numKeypoints);
-    vcurbvs.reserve(numKeypoints);
-
-    size_t numParallax = 0;
-    float avgParallax = 0.;
-
-    // Compute rotation compensated parallax
-    Eigen::Matrix3d Rkfcur = keyframe->getRcw() * currFrame_->getRwc();
-
-    // Init bearing vectors and check parallax
-    for (const auto &it: currFrame_->mapKeypoints_)
-    {
-        auto &keypoint = it.second;
-
-        // Get the prev keyframe related kp if it exists
-        auto keyframeKeypoint = keyframe->getKeypointById(keypoint.keypointId_);
-
-        if (keyframeKeypoint.keypointId_ != keypoint.keypointId_)
-        {
-            continue;
-        }
-
-        // Store the bvs and their ids
-        vkfbvs.push_back(keyframeKeypoint.bv_);
-        vcurbvs.push_back(keypoint.bv_);
-        keypointIds.push_back(keypoint.keypointId_);
-
-        cv::Point2f rotPx = keyframe->projCamToImage(Rkfcur * keypoint.bv_);
-
-        // Compute parallax
-        avgParallax += cv::norm(rotPx - keyframeKeypoint.unpx_);
-        numParallax++;
-    }
-
-    // Average parallax
-    avgParallax /= numParallax;
-
-    if (avgParallax < 2.0 * state_->multiViewRansacError_)
-    {
-        if (state_->debug_)
-        {
-            std::cout << "- [Visual-Frontend]: OutlierFiltering - Not enough parallax (" << avgParallax << " px) to compute 5-pt Essential Matrix" << std::endl;
-        }
-
-        return;
-    }
-
-    bool doOptimize = false;
-
-    // use the resulting motion if tracking is poor
-    if (mapManager_->numKeyframes_ > 2 && currFrame_->numKeypoints3d_ < 30)
-    {
-        doOptimize = true;
-    }
-
-    Eigen::Matrix3d Rkfc;
-    Eigen::Vector3d tkfc;
-
-    bool success = MultiViewGeometry::compute5ptEssentialMatrix(
-            vkfbvs,
-            vcurbvs,
-            state_->multiViewRansacNumIterations_,
-            state_->multiViewRansacError_,
-            doOptimize,
-            state_->multiViewRandomEnabled_,
-            currFrame_->cameraCalibration_->fx_,
-            currFrame_->cameraCalibration_->fy_,
-            Rkfc,
-            tkfc,
-            outliersIndices);
-
-    if (state_->debug_)
-    {
-        std::cout << "- [Visual-Frontend]: OutlierFiltering - Epipolar num outliers : " << outliersIndices.size() << std::endl;
-    }
-
-    if (!success)
-    {
-        std::cout << "- [Visual-Frontend]: OutlierFiltering - No pose could be computed from 5-pt EssentialMatrix" << std::endl;
-
-        return;
-    }
-
-    if (outliersIndices.size() > 0.5 * vkfbvs.size())
-    {
-        std::cout << "- [Visual-Frontend]: OutlierFiltering - Too many outliers, skipping as might be degenerate case" << std::endl;
-
-        return;
-    }
-
-    // Remove outliers
-    for (const auto &idx: outliersIndices)
-    {
-        mapManager_->removeObsFromCurrFrameById(keypointIds.at(idx));
-    }
-
-    // In case we wanted to use the resulting motion (can help when tracking is poor)
-    if (doOptimize && mapManager_->numKeyframes_ > 2)
-    {
-        // Get motion model translation scale from last keyframe
-        Sophus::SE3d Tkfw = keyframe->getTcw();
-        Sophus::SE3d Tkfcur = Tkfw * currFrame_->getTwc();
-
-        double scale = Tkfcur.translation().norm();
-        tkfc.normalize();
-
-        // Update current pose with Essential Mat. relative motion and current trans. scale
-        Sophus::SE3d Tkfc(Rkfc, scale * tkfc);
-
-        currFrame_->setTwc(keyframe->getTwc() * Tkfc);
     }
 }
 
@@ -655,10 +509,10 @@ bool VisualFrontend::checkReadyForInit()
         return false;
     }
 
-    Eigen::Matrix3d Rkfc;
-    Eigen::Vector3d tkfc;
-    Rkfc.setIdentity();
-    tkfc.setZero();
+    Eigen::Matrix3d Rwc;
+    Eigen::Vector3d twc;
+    Rwc.setIdentity();
+    twc.setZero();
 
     bool success = MultiViewGeometry::compute5ptEssentialMatrix(
             vkfbvs,
@@ -669,8 +523,8 @@ bool VisualFrontend::checkReadyForInit()
             state_->multiViewRandomEnabled_,
             currFrame_->cameraCalibration_->fx_,
             currFrame_->cameraCalibration_->fy_,
-            Rkfc,
-            tkfc,
+            Rwc,
+            twc,
             outliersIndices);
 
     if (!success)
@@ -689,10 +543,10 @@ bool VisualFrontend::checkReadyForInit()
         mapManager_->removeObsFromCurrFrameById(keypointIds.at(index));
     }
 
-    //Normalize the translation scale.
-    tkfc.normalize();
+    // Normalize the translation scale
+    twc.normalize();
 
-    currFrame_->setTwc(Rkfc, tkfc);
+    currFrame_->setTwc(Rwc, twc);
 
     return true;
 }
