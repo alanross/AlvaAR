@@ -26,11 +26,6 @@ void VisualFrontend::track(cv::Mat &image, double timestamp)
     {
         mapManager_->createKeyframe(currImage_, image);
 
-        if (state_->trackKeyframeToFrame_)
-        {
-            cv::buildOpticalFlowPyramid(currImage_, keyframePyramid_, state_->kltWinSize_, state_->kltPyramidLevels_);
-        }
-
         if (!state_->slamResetRequested_ && state_->slamReadyForInit_)
         {
             Keyframe kf(currFrame_->keyframeId_, image);
@@ -54,15 +49,7 @@ bool VisualFrontend::process(cv::Mat &image, double timestamp)
     motionModel_.applyMotionModel(Twc, timestamp);
     currFrame_->setTwc(Twc);
 
-    // Track the new image
-    if (state_->trackKeyframeToFrame_)
-    {
-        kltTrackingFromKeyframe();
-    }
-    else
-    {
-        kltTrackingFromMotionPrior();
-    }
+    kltTrackingFromMotionPrior();
 
     //epipolar2d2dOutlierFiltering();
 
@@ -73,20 +60,19 @@ bool VisualFrontend::process(cv::Mat &image, double timestamp)
             state_->slamResetRequested_ = true;
             return false;
         }
-        else if (checkReadyForInit())
+
+        if (checkReadyForInit())
         {
             state_->slamReadyForInit_ = true;
             return true;
         }
-        else
-        {
-            if (state_->debug_)
-            {
-                std::cout << "- [Visual-Frontend]: Not ready for initialization" << std::endl;
-            }
 
-            return false;
+        if (state_->debug_)
+        {
+            std::cout << "- [Visual-Frontend]: Not ready for initialization" << std::endl;
         }
+
+        return false;
     }
     else
     {
@@ -254,171 +240,6 @@ void VisualFrontend::kltTrackingFromMotionPrior()
         if (state_->debug_)
         {
             std::cout << "- [Visual-Frontend]: FromMotionPrior - no prior : " << numGood << " out of " << numKeypoints << " kps tracked" << std::endl;
-        }
-    }
-}
-
-void VisualFrontend::kltTrackingFromKeyframe()
-{
-    // Get current kps and init priors for tracking
-    std::vector<int> keyPoint3dIds;
-    std::vector<int> keyPointIds;
-    std::vector<cv::Point2f> keyPoints3d;
-    std::vector<cv::Point2f> priors3d;
-    std::vector<cv::Point2f> keyPoints;
-    std::vector<cv::Point2f> priors;
-    std::vector<bool> keypointIs3d;
-
-    // First track 3d kps on only 2 levels
-    keyPoint3dIds.reserve(currFrame_->numKeypoints3d_);
-    keyPoints3d.reserve(currFrame_->numKeypoints3d_);
-    priors3d.reserve(currFrame_->numKeypoints3d_);
-
-    // Then track 2d kps on full pyramid levels
-    keyPointIds.reserve(currFrame_->numKeypoints_);
-    keyPoints.reserve(currFrame_->numKeypoints_);
-    priors.reserve(currFrame_->numKeypoints_);
-    keypointIs3d.reserve(currFrame_->numKeypoints_);
-
-    // Get prev keyframe
-    auto pkf = mapManager_->mapKeyframes_.at(currFrame_->keyframeId_);
-
-    if (pkf == nullptr)
-    {
-        return;
-    }
-
-    std::vector<int> badIds;
-    badIds.reserve(currFrame_->numKeypoints_ * 0.2);
-
-    for (const auto &it: currFrame_->mapKeypoints_)
-    {
-        auto &keypoint = it.second;
-        auto kfkpit = pkf->mapKeypoints_.find(keypoint.keypointId_);
-
-        if (kfkpit == pkf->mapKeypoints_.end())
-        {
-            badIds.push_back(keypoint.keypointId_);
-            continue;
-        }
-
-        // Init prior px pos. from motion model
-        if (state_->kltUsePrior_)
-        {
-            if (keypoint.is3d_)
-            {
-                cv::Point2f projpx = currFrame_->projWorldToImageDist(mapManager_->mapMapPoints_.at(keypoint.keypointId_)->getPoint());
-
-                // Add prior if projected into image
-                if (currFrame_->isInImage(projpx))
-                {
-                    keyPoints3d.push_back(kfkpit->second.px_);
-                    priors3d.push_back(projpx);
-                    keyPoint3dIds.push_back(keypoint.keypointId_);
-                    keypointIs3d.push_back(true);
-                    continue;
-                }
-            }
-        }
-
-        // For other kps init prior with prev px pos.
-        keyPointIds.push_back(keypoint.keypointId_);
-        keyPoints.push_back(kfkpit->second.px_);
-        priors.push_back(keypoint.px_);
-    }
-
-    for (const auto &id: badIds)
-    {
-        mapManager_->removeObsFromCurrFrameById(id);
-    }
-
-    // 1st track 3d key points if using priors
-    if (state_->kltUsePrior_ && !priors3d.empty())
-    {
-        // Good / bad kps vector
-        std::vector<bool> keyPointStatus;
-
-        auto vprior = priors3d;
-
-        featureTracker_->fbKltTracking(
-                keyframePyramid_,
-                currPyramid_,
-                state_->kltWinSizeWH_,
-                1,
-                state_->kltError_,
-                state_->kltMaxFbDistance_,
-                keyPoints3d,
-                priors3d,
-                keyPointStatus);
-
-        size_t numGood = 0;
-        size_t numKeypoints = keyPoints3d.size();
-
-        for (size_t i = 0; i < numKeypoints; i++)
-        {
-            if (keyPointStatus.at(i))
-            {
-                currFrame_->updateKeypoint(keyPoint3dIds.at(i), priors3d.at(i));
-                numGood++;
-            }
-            else
-            {
-                // If tracking failed, try full pyramid size
-                keyPointIds.push_back(keyPoint3dIds.at(i));
-                keyPoints.push_back(keyPoints3d.at(i));
-                priors.push_back(currFrame_->mapKeypoints_.at(keyPoint3dIds.at(i)).px_);
-            }
-        }
-
-        if (state_->debug_)
-        {
-            std::cout << "- [Visual-Frontend]: FromKeyframe - w. priors : " << numGood << " out of " << numKeypoints << " kps tracked" << std::endl;
-        }
-
-        if (numGood < 0.33 * numKeypoints)
-        {
-            // Motion model might be quite wrong, P3P is recommended next and not using any prior
-            p3pReq_ = true;
-            priors = keyPoints;
-        }
-    }
-
-    // 2nd track other key points if any
-    if (!keyPoints.empty())
-    {
-        // Good / bad kps vector
-        std::vector<bool> keypointStatus;
-
-        featureTracker_->fbKltTracking(
-                keyframePyramid_,
-                currPyramid_,
-                state_->kltWinSizeWH_,
-                state_->kltPyramidLevels_,
-                state_->kltError_,
-                state_->kltMaxFbDistance_,
-                keyPoints,
-                priors,
-                keypointStatus);
-
-        size_t numGood = 0;
-        size_t numKeypoints = keyPoints.size();
-
-        for (size_t i = 0; i < numKeypoints; i++)
-        {
-            if (keypointStatus.at(i))
-            {
-                currFrame_->updateKeypoint(keyPointIds.at(i), priors.at(i));
-                numGood++;
-            }
-            else
-            {
-                mapManager_->removeObsFromCurrFrameById(keyPointIds.at(i));
-            }
-        }
-
-        if (state_->debug_)
-        {
-            std::cout << "- [Visual-Frontend]: FromKeyframe - no prior : " << numGood << " out of " << numKeypoints << " kps tracked" << std::endl;
         }
     }
 }
@@ -997,10 +818,7 @@ float VisualFrontend::computeParallax(const int keyframeId, bool doUnRotate, boo
 void VisualFrontend::preprocessImage(cv::Mat &image)
 {
     // update prev image
-    if (!state_->trackKeyframeToFrame_)
-    {
-        cv::swap(currImage_, prevImage_);
-    }
+    cv::swap(currImage_, prevImage_);
 
     // update curr image
     if (state_->claheEnabled_)
@@ -1016,7 +834,7 @@ void VisualFrontend::preprocessImage(cv::Mat &image)
     if (state_->kltEnabled_)
     {
         // If tracking from prev image, swap the pyramid
-        if (!currPyramid_.empty() && !state_->trackKeyframeToFrame_)
+        if (!currPyramid_.empty())
         {
             prevPyramid_.swap(currPyramid_);
         }

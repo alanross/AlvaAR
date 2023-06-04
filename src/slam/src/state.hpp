@@ -52,7 +52,6 @@ public:
     int kltWinSizeWH_ = 9;
     cv::Size kltWinSize_ = cv::Size(kltWinSizeWH_, kltWinSizeWH_);
     float kltMaxFbDistance_ = 0.5;
-    bool trackKeyframeToFrame_ = false;
 
     // Image features
     int trackerMaxIterations_ = 30;
