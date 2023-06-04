@@ -12,40 +12,9 @@ class MultiViewGeometry
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    // Triangulation
-
     static Eigen::Vector3d triangulate(const Sophus::SE3d &Tlr, const Eigen::Vector3d &bvl, const Eigen::Vector3d &bvr);
 
-    // P3P - PnP methods
-
     static bool p3pRansac(
-            const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &bvs,
-            const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &vwpts,
-            const int maxIterations,
-            const float errorThreshold,
-            const bool optimize,
-            const bool doRandom,
-            const float fx,
-            const float fy,
-            Sophus::SE3d &Twc,
-            std::vector<int> &outliersIndices,
-            bool useP3PLMeds = false
-    );
-
-    static bool opengvP3PRansac(
-            const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &observations,
-            const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &wPoints,
-            const int maxIterations,
-            const float errorThreshold,
-            const bool optimize,
-            const bool doRandom,
-            const float fx,
-            const float fy,
-            Sophus::SE3d &Twc,
-            std::vector<int> &outliersIndices
-    );
-
-    static bool opengvP3PLMeds(
             const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &observations,
             const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &wPoints,
             const int maxIterations,
@@ -72,8 +41,6 @@ public:
             const float cy,
             std::vector<int> &outliersIndices
     );
-
-    // 2D-2D Epipolar Geometry
 
     static bool compute5ptEssentialMatrix(
             const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &observations1,

@@ -643,8 +643,7 @@ bool VisualFrontend::computePose()
                 currFrame_->cameraCalibration_->fx_,
                 currFrame_->cameraCalibration_->fy_,
                 Twc,
-                outliersIndices,
-                true //use meds, only effective with OpenGV
+                outliersIndices
         );
 
         if (state_->debug_)

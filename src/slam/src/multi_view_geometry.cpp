@@ -8,8 +8,6 @@
 #include <opengv/sac_problems/absolute_pose/AbsolutePoseSacProblem.hpp>
 #include <opengv/relative_pose/CentralRelativeAdapter.hpp>
 #include <opengv/sac_problems/relative_pose/CentralRelativePoseSacProblem.hpp>
-#include <opencv2/core/eigen.hpp>
-
 
 Eigen::Vector3d MultiViewGeometry::triangulate(const Sophus::SE3d &Tlr, const Eigen::Vector3d &bvl, const Eigen::Vector3d &bvr)
 {
@@ -24,27 +22,16 @@ Eigen::Vector3d MultiViewGeometry::triangulate(const Sophus::SE3d &Tlr, const Ei
 }
 
 bool MultiViewGeometry::p3pRansac(
-        const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &bvs,
-        const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &vwpts,
-        const int maxIterations, const float errorThreshold, const bool optimize, const bool doRandom,
-        const float fx, const float fy, Sophus::SE3d &Twc, std::vector<int> &outliersIndices,
-        bool useP3PLMeds)
-{
-    if (useP3PLMeds)
-    {
-        return opengvP3PLMeds(bvs, vwpts, maxIterations, errorThreshold, optimize, doRandom, fx, fy, Twc, outliersIndices);
-    }
-    else
-    {
-        return opengvP3PRansac(bvs, vwpts, maxIterations, errorThreshold, optimize, doRandom, fx, fy, Twc, outliersIndices);
-    }
-}
-
-bool MultiViewGeometry::opengvP3PRansac(
         const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &observations,
         const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &wPoints,
-        const int maxIterations, const float errorThreshold, const bool optimize, const bool doRandom,
-        const float fx, const float fy, Sophus::SE3d &Twc, std::vector<int> &outliersIndices)
+        const int maxIterations,
+        const float errorThreshold,
+        const bool optimize,
+        const bool doRandom,
+        const float fx,
+        const float fy,
+        Sophus::SE3d &Twc,
+        std::vector<int> &outliersIndices)
 {
     assert(observations.size() == wPoints.size());
 
@@ -71,7 +58,8 @@ bool MultiViewGeometry::opengvP3PRansac(
     opengv::absolute_pose::CentralAbsoluteAdapter adapter(gvbvs, gvwpt);
 
     // Create an AbsolutePoseSac problem and Ransac
-    opengv::sac::Ransac<opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> ransac;
+    opengv::sac::Lmeds<opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> ransac;
+//    opengv::sac::Ransac<opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> ransac;
 
     std::shared_ptr<opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> absposeproblem_ptr(
             new opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem(
@@ -138,110 +126,18 @@ bool MultiViewGeometry::opengvP3PRansac(
     return true;
 }
 
-bool MultiViewGeometry::opengvP3PLMeds(
-        const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &observations,
-        const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &wPoints,
-        const int maxIterations, const float errorThreshold, const bool optimize, const bool doRandom,
-        const float fx, const float fy, Sophus::SE3d &Twc, std::vector<int> &outliersIndices)
-{
-    assert(observations.size() == wPoints.size());
-
-    size_t nb3dpts = observations.size();
-
-    if (nb3dpts < 4)
-    {
-        return false;
-    }
-
-    outliersIndices.reserve(nb3dpts);
-
-    opengv::bearingVectors_t gvbvs;
-    opengv::points_t gvwpt;
-    gvbvs.reserve(nb3dpts);
-    gvwpt.reserve(nb3dpts);
-
-    for (size_t i = 0; i < nb3dpts; i++)
-    {
-        gvbvs.push_back(observations.at(i));
-        gvwpt.push_back(wPoints.at(i));
-    }
-
-    opengv::absolute_pose::CentralAbsoluteAdapter adapter(gvbvs, gvwpt);
-
-    // Create an AbsolutePoseSac problem and Ransac
-    opengv::sac::Lmeds<opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> ransac;
-
-    std::shared_ptr<opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem> absposeproblem_ptr(
-            new opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem(
-                    adapter,
-                    opengv::sac_problems::absolute_pose::AbsolutePoseSacProblem::KNEIP, // KNEIP, GAO or EPNP
-                    doRandom)
-    );
-
-    float focal = fx + fy;
-    focal /= 2.;
-
-    ransac.sac_model_ = absposeproblem_ptr;
-    ransac.threshold_ = (1.0 - cos(atan(errorThreshold / focal)));
-    ransac.max_iterations_ = maxIterations;
-
-    // Computing the pose from P3P
-    ransac.computeModel(0);
-
-    // If no solution found, return false
-    if (ransac.inliers_.size() < 5)
-    {
-        return false;
-    }
-
-    // Might happen apparently...
-    if (!Sophus::isOrthogonal(ransac.model_coefficients_.block<3, 3>(0, 0)))
-    {
-        return false;
-    }
-
-    // Optimize the computed pose with inliers only
-    opengv::transformation_t T_opt;
-
-    if (optimize)
-    {
-        ransac.sac_model_->optimizeModelCoefficients(ransac.inliers_, ransac.model_coefficients_, T_opt);
-
-        Twc.translation() = T_opt.rightCols(1);
-        Twc.setRotationMatrix(T_opt.leftCols(3));
-    }
-    else
-    {
-        Twc.translation() = ransac.model_coefficients_.rightCols(1);
-        Twc.setRotationMatrix(ransac.model_coefficients_.leftCols(3));
-    }
-
-    size_t k = 0;
-    for (size_t i = 0; i < nb3dpts; i++)
-    {
-        if (ransac.inliers_.at(k) == (int) i)
-        {
-            k++;
-            if (k == ransac.inliers_.size())
-            {
-                k = 0;
-            }
-        }
-        else
-        {
-            outliersIndices.push_back(i);
-        }
-    }
-
-    return true;
-}
-
 bool MultiViewGeometry::ceresPnP(
         const std::vector<Eigen::Vector2d, Eigen::aligned_allocator<Eigen::Vector2d> > &unKeypoints,
         const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &wPoints,
-        Sophus::SE3d &Twc, const int maxIterations,
-        const float chi2th, const bool useRobust, const bool applyL2AfterRobust,
-        const float fx, const float fy, const float cx, const float cy,
+        Sophus::SE3d &Twc,
+        const int maxIterations,
+        const float chi2th,
+        const bool useRobust,
+        const bool applyL2AfterRobust,
+        const float fx,
+        const float fy,
+        const float cx,
+        const float cy,
         std::vector<int> &outliersIndices)
 {
     assert(unKeypoints.size() == wPoints.size());
@@ -329,9 +225,15 @@ bool MultiViewGeometry::ceresPnP(
 bool MultiViewGeometry::compute5ptEssentialMatrix(
         const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &observations1,
         const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &observations2,
-        const int maxIterations, const float errorThreshold, const bool optimize,
-        const bool doRandom, const float fx, const float fy, Eigen::Matrix3d &Rwc,
-        Eigen::Vector3d &twc, std::vector<int> &outliersIndices)
+        const int maxIterations,
+        const float errorThreshold,
+        const bool optimize,
+        const bool doRandom,
+        const float fx,
+        const float fy,
+        Eigen::Matrix3d &Rwc,
+        Eigen::Vector3d &twc,
+        std::vector<int> &outliersIndices)
 {
     assert(observations1.size() == observations2.size());
 
