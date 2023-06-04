@@ -237,27 +237,28 @@ bool MultiViewGeometry::compute5ptEssentialMatrix(
 {
     assert(observations1.size() == observations2.size());
 
-    size_t nbpts = observations1.size();
+    size_t numPoints = observations1.size();
 
-    if (nbpts < 8)
+    if (numPoints < 8)
     {
         return false;
     }
 
-    outliersIndices.reserve(nbpts);
+    outliersIndices.reserve(numPoints);
 
-    opengv::bearingVectors_t vbv1, vbv2;
-    vbv1.reserve(nbpts);
-    vbv2.reserve(nbpts);
+    opengv::bearingVectors_t bearingVectors1;
+    opengv::bearingVectors_t bearingVectors2;
+    bearingVectors1.reserve(numPoints);
+    bearingVectors2.reserve(numPoints);
 
-    for (size_t i = 0; i < nbpts; i++)
+    for (size_t i = 0; i < numPoints; i++)
     {
-        vbv1.push_back(observations1.at(i));
-        vbv2.push_back(observations2.at(i));
+        bearingVectors1.push_back(observations1.at(i));
+        bearingVectors2.push_back(observations2.at(i));
     }
 
     //create a central relative adapter
-    opengv::relative_pose::CentralRelativeAdapter adapter(vbv1, vbv2);
+    opengv::relative_pose::CentralRelativeAdapter adapter(bearingVectors1, bearingVectors2);
 
     opengv::sac::Ransac<opengv::sac_problems::relative_pose::CentralRelativePoseSacProblem> ransac;
 
@@ -265,7 +266,8 @@ bool MultiViewGeometry::compute5ptEssentialMatrix(
             new opengv::sac_problems::relative_pose::CentralRelativePoseSacProblem(
                     adapter,
                     opengv::sac_problems::relative_pose::CentralRelativePoseSacProblem::NISTER,
-                    doRandom)
+                    doRandom
+            )
     );
 
     float focal = fx + fy;
@@ -295,11 +297,10 @@ bool MultiViewGeometry::compute5ptEssentialMatrix(
 
         Rwc = T_opt.leftCols(3);
         twc = T_opt.rightCols(1);
-        twc.normalize();
     }
 
     size_t k = 0;
-    for (size_t i = 0; i < nbpts; i++)
+    for (size_t i = 0; i < numPoints; i++)
     {
         if (ransac.inliers_.at(k) == (int) i)
         {
