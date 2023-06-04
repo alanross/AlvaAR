@@ -13,6 +13,7 @@ System::~System()
 void System::configure(int imageWidth, int imageHeight, double fx, double fy, double cx, double cy, double k1, double k2, double p1, double p2)
 {
     state_ = std::make_shared<State>(imageWidth, imageHeight, 40);
+    state_->debug_ = false;
     state_->claheEnabled_ = false;
     state_->mapKeyframeFilteringRatio_ = 0.95;
     state_->p3pEnabled_ = true;
@@ -40,7 +41,10 @@ void System::configure(int imageWidth, int imageHeight, double fx, double fy, do
 
 void System::reset()
 {
-    std::cout << "- [System]: Reset" << std::endl;
+    if (state_->debug_)
+    {
+        std::cout << "- [System]: Reset" << std::endl;
+    }
 
     currFrame_->reset();
     visualFrontend_->reset();
@@ -176,7 +180,10 @@ cv::Mat System::processPlane(std::vector<Eigen::Vector3d> mapPoints, Sophus::SE3
 
     if (numMapPoints < 32)
     {
-        std::cout << "- [System]: Too few points to detect plane: " << numMapPoints << std::endl;
+        if (state_->debug_)
+        {
+            std::cout << "- [System]: FindPlane - Too few points to detect plane: " << numMapPoints << std::endl;
+        }
 
         return cv::Mat();
     }
@@ -261,7 +268,10 @@ cv::Mat System::processPlane(std::vector<Eigen::Vector3d> mapPoints, Sophus::SE3
 
     if (numInliers < 32)
     {
-        std::cout << "- [System]: Too few inliers to detect plane: " << numInliers << std::endl;
+        if (state_->debug_)
+        {
+            std::cout << "- [System]: FindPlane - Too few inliers to detect plane: " << numInliers << std::endl;
+        }
 
         return cv::Mat();
     }

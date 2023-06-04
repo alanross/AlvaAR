@@ -28,14 +28,22 @@ void Mapper::processNewKeyframe(const Keyframe &keyframe)
     {
         if (keyframe.keyframeId_ == 1 && newKeyframe->numKeypoints3d_ < 30)
         {
-            std::cout << "- [Mapper]: Reset Requested - Bad initialization detected! " << std::endl;
+            if (state_->debug_)
+            {
+                std::cout << "- [Mapper]: NewKeyframe - Reset Requested. Bad initialization detected! " << std::endl;
+            }
+
             state_->slamResetRequested_ = true;
             return;
         }
 
         if (keyframe.keyframeId_ < 10 && newKeyframe->numKeypoints3d_ < 3)
         {
-            std::cout << "- [Mapper]: Reset Requested - Num 3D kps:" << newKeyframe->numKeypoints3d_ << std::endl;
+            if (state_->debug_)
+            {
+                std::cout << "- [Mapper]: NewKeyframe - Reset Requested. Reset Requested. Num 3D kps:" << newKeyframe->numKeypoints3d_ << std::endl;
+            }
+
             state_->slamResetRequested_ = true;
             return;
         }

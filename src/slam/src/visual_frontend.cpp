@@ -80,7 +80,11 @@ bool VisualFrontend::process(cv::Mat &image, double timestamp)
         }
         else
         {
-            std::cout << "- [Visual-Front-End]: Not ready for initialization\n";
+            if (state_->debug_)
+            {
+                std::cout << "- [Visual-Frontend]: Not ready for initialization" << std::endl;
+            }
+
             return false;
         }
     }
@@ -90,7 +94,10 @@ bool VisualFrontend::process(cv::Mat &image, double timestamp)
 
         if (!success)
         {
-            std::cout << "- [Visual-Front-End]: Failed to compute pose num times: " << poseFailedCounter_ << std::endl;
+            if (state_->debug_)
+            {
+                std::cout << "- [Visual-Frontend]: Failed to compute pose num times: " << poseFailedCounter_ << std::endl;
+            }
 
             poseFailedCounter_++;
 
@@ -200,7 +207,7 @@ void VisualFrontend::kltTrackingFromMotionPrior()
 
         if (state_->debug_)
         {
-            std::cout << "- [Visual-Front-End]: KLT Tracking w. priors : " << numGood << " out of " << numKeypoints << " kps tracked!\n";
+            std::cout << "- [Visual-Frontend]: FromMotionPrior - w. priors : " << numGood << " out of " << numKeypoints << " kps tracked" << std::endl;
         }
 
         if (numGood < 0.33 * numKeypoints)
@@ -246,7 +253,7 @@ void VisualFrontend::kltTrackingFromMotionPrior()
 
         if (state_->debug_)
         {
-            std::cout << "- [Visual-Front-End]: KLT Tracking no prior : " << numGood << " out of " << numKeypoints << " kps tracked!\n";
+            std::cout << "- [Visual-Frontend]: FromMotionPrior - no prior : " << numGood << " out of " << numKeypoints << " kps tracked" << std::endl;
         }
     }
 }
@@ -365,7 +372,7 @@ void VisualFrontend::kltTrackingFromKeyframe()
 
         if (state_->debug_)
         {
-            std::cout << "- [Visual-Front-End]: KLT Tracking w. priors : " << numGood << " out of " << numKeypoints << " kps tracked!\n";
+            std::cout << "- [Visual-Frontend]: FromKeyframe - w. priors : " << numGood << " out of " << numKeypoints << " kps tracked" << std::endl;
         }
 
         if (numGood < 0.33 * numKeypoints)
@@ -411,7 +418,7 @@ void VisualFrontend::kltTrackingFromKeyframe()
 
         if (state_->debug_)
         {
-            std::cout << "- [Visual-Front-End]: KLT Tracking no prior : " << numGood << " out of " << numKeypoints << " kps tracked!\n";
+            std::cout << "- [Visual-Frontend]: FromKeyframe - no prior : " << numGood << " out of " << numKeypoints << " kps tracked" << std::endl;
         }
     }
 }
@@ -422,7 +429,7 @@ void VisualFrontend::epipolar2d2dOutlierFiltering()
 
     if (keyframe == nullptr)
     {
-        std::cerr << "- [Visual-Front-End]: ERROR! Previous Kf does not exist yet (epipolar2d2d()).\n";
+        std::cerr << "- [Visual-Frontend]: OutlierFiltering - ERROR! Previous Kf does not exist yet (epipolar2d2d()).\n";
         exit(-1);
     }
 
@@ -431,7 +438,11 @@ void VisualFrontend::epipolar2d2dOutlierFiltering()
 
     if (numKeypoints < 8)
     {
-        std::cout << "- [Visual-Front-End]: Not enough kps to compute Essential Matrix" << std::endl;
+        if (state_->debug_)
+        {
+            std::cout << "- [Visual-Frontend]: OutlierFiltering - Not enough kps to compute Essential Matrix" << std::endl;
+        }
+
         return;
     }
 
@@ -484,8 +495,9 @@ void VisualFrontend::epipolar2d2dOutlierFiltering()
     {
         if (state_->debug_)
         {
-            std::cout << "- [Visual-Front-End]: Not enough parallax (" << avgParallax << " px) to compute 5-pt Essential Matrix\n";
+            std::cout << "- [Visual-Frontend]: OutlierFiltering - Not enough parallax (" << avgParallax << " px) to compute 5-pt Essential Matrix" << std::endl;
         }
+
         return;
     }
 
@@ -499,16 +511,6 @@ void VisualFrontend::epipolar2d2dOutlierFiltering()
 
     Eigen::Matrix3d Rkfc;
     Eigen::Vector3d tkfc;
-
-    if (state_->debug_)
-    {
-        std::cout << "\n \t>>> 5-pt EssentialMatrix Ransac :";
-        std::cout << "\n \t>>> nb pts : " << numKeypoints;
-        std::cout << " / avg. parallax : " << avgParallax;
-        std::cout << " / ransac_iterations : " << state_->multiViewRansacNumIterations_;
-        std::cout << " / ransac_error : " << state_->multiViewRansacError_;
-        std::cout << "\n\n";
-    }
 
     bool success = MultiViewGeometry::compute5ptEssentialMatrix(
             vkfbvs,
@@ -525,18 +527,20 @@ void VisualFrontend::epipolar2d2dOutlierFiltering()
 
     if (state_->debug_)
     {
-        std::cout << "- [Visual-Front-End]: Epipolar nb outliers : " << outliersIndices.size();
+        std::cout << "- [Visual-Frontend]: OutlierFiltering - Epipolar num outliers : " << outliersIndices.size() << std::endl;
     }
 
     if (!success)
     {
-        std::cout << "- [Visual-Front-End]: No pose could be computed from 5-pt EssentialMatrix" << std::endl;
+        std::cout << "- [Visual-Frontend]: OutlierFiltering - No pose could be computed from 5-pt EssentialMatrix" << std::endl;
+
         return;
     }
 
     if (outliersIndices.size() > 0.5 * vkfbvs.size())
     {
-        std::cout << "- [Visual-Front-End]: Too many outliers, skipping as might be degenerate case" << std::endl;
+        std::cout << "- [Visual-Frontend]: OutlierFiltering - Too many outliers, skipping as might be degenerate case" << std::endl;
+
         return;
     }
 
@@ -571,7 +575,7 @@ bool VisualFrontend::computePose()
     {
         if (state_->debug_)
         {
-            std::cout << "- [Visual-Front-End]: Not enough kps to compute P3P/PnP\n";
+            std::cout << "- [Visual-Frontend]: Pose - Not enough kps to compute P3P/PnP" << std::endl;
         }
 
         return false;
@@ -624,15 +628,6 @@ bool VisualFrontend::computePose()
 
     if (doP3P)
     {
-        if (state_->debug_)
-        {
-            std::cout << "\n \t>>>P3P Ransac : ";
-            std::cout << "\n \t>>> nb 3d pts : " << num3dKeypoints;
-            std::cout << " / ransac_iterations : " << state_->multiViewRansacNumIterations_;
-            std::cout << " / ransac_error : " << state_->multiViewRansacError_;
-            std::cout << "\n\n";
-        }
-
         success = MultiViewGeometry::p3pRansac(
                 vbvs,
                 vwpts,
@@ -648,7 +643,7 @@ bool VisualFrontend::computePose()
 
         if (state_->debug_)
         {
-            std::cout << "- [Visual-Front-End]: P3P-LMeds nb outliers : " << outliersIndices.size();
+            std::cout << "- [Visual-Frontend]: Pose - P3P num outliers : " << outliersIndices.size() << std::endl;
         }
 
         // Check that pose estimation was good enough
@@ -658,7 +653,7 @@ bool VisualFrontend::computePose()
         {
             if (state_->debug_)
             {
-                std::cout << "- [Visual-Front-End]: Not enough inliers for reliable pose est. Resetting keyframe state\n";
+                std::cout << "- [Visual-Frontend]: Pose - Not enough inliers for reliable pose est. Resetting keyframe state" << std::endl;
             }
 
             resetFrame();
@@ -666,12 +661,12 @@ bool VisualFrontend::computePose()
             return false;
         }
 
-        // pose seems to be OK!
+        // pose seems to be OK
 
         // update frame pose
         currFrame_->setTwc(Twc);
 
-        // Remove outliers before PnP refinement (a bit dirty)
+        // Remove outliers before PnP refinement
         int k = 0;
         for (const auto &index: outliersIndices)
         {
@@ -709,7 +704,7 @@ bool VisualFrontend::computePose()
 
     if (state_->debug_)
     {
-        std::cout << "- [Visual-Front-End]: Ceres PnP outliers : " << outliersIndices.size() << ", inliers: " << numInliers << "\n";
+        std::cout << "- [Visual-Frontend]: Pose - Ceres PnP outliers : " << outliersIndices.size() << ", inliers: " << numInliers << std::endl;
     }
 
     if (!success || numInliers < 5 || outliersIndices.size() > 0.5 * vwpts.size() || Twc.translation().array().isInf().any() || Twc.translation().array().isNaN().any())
@@ -722,7 +717,7 @@ bool VisualFrontend::computePose()
 
         if (state_->debug_)
         {
-            std::cout << "- [Visual-Front-End]: Not enough inliers for reliable pose est. Resetting keyframe state\n";
+            std::cout << "- [Visual-Frontend]: Pose - Not enough inliers for reliable pose est. Resetting keyframe state" << std::endl;
         }
 
         resetFrame();
@@ -766,7 +761,11 @@ bool VisualFrontend::checkReadyForInit()
 
     if (numKeypoints < 8)
     {
-        std::cout << "- [Visual-Front-End]: Can't compute 5-pt Essential matrix. Not enough keypoints.\n";
+        if (state_->debug_)
+        {
+            std::cout << "- [Visual-Frontend]: CheckReady - Can't compute 5-pt Essential matrix. Not enough keypoints" << std::endl;
+        }
+
         return false;
     }
 
@@ -814,7 +813,11 @@ bool VisualFrontend::checkReadyForInit()
 
     if (numParallax < 8)
     {
-        std::cout << "- [Visual-Front-End]: Can't compute 5-pt Essential matrix. Not enough prev keyframe keypoints.\n";
+        if (state_->debug_)
+        {
+            std::cout << "- [Visual-Frontend]: CheckReady - Can't compute 5-pt Essential matrix. Not enough keypoints in prev keyframe" << std::endl;
+        }
+
         return false;
     }
 
@@ -823,7 +826,11 @@ bool VisualFrontend::checkReadyForInit()
 
     if (avgRotParallax < state_->minAvgRotationParallax_)
     {
-        std::cout << "- [Visual-Front-End]: Can't compute 5-pt Essential matrix. Not enough parallax " << avgRotParallax << " px)\n";
+        if (state_->debug_)
+        {
+            std::cout << "- [Visual-Frontend]: CheckReady - Can't compute 5-pt Essential matrix. Not enough parallax " << avgRotParallax << " px)" << std::endl;
+        }
+
         return false;
     }
 
@@ -847,19 +854,22 @@ bool VisualFrontend::checkReadyForInit()
 
     if (!success)
     {
-        std::cout << "- [Visual-Front-End]: 5-pt Essential Matrix failed.\n";
+        if (state_->debug_)
+        {
+            std::cout << "- [Visual-Frontend]: CheckReady - 5-pt Essential Matrix failed" << std::endl;
+        }
+
         return false;
     }
 
     // Remove outliers from current frame
-    for (const auto &idx: outliersIndices)
+    for (const auto &index: outliersIndices)
     {
-        mapManager_->removeObsFromCurrFrameById(keypointIds.at(idx));
+        mapManager_->removeObsFromCurrFrameById(keypointIds.at(index));
     }
 
     //Normalize the translation scale.
     tkfc.normalize();
-    //tkfc = tkfc.eval() * 1.0;
 
     currFrame_->setTwc(Rkfc, tkfc);
 

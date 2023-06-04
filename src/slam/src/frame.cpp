@@ -120,7 +120,6 @@ void Frame::addKeypoint(const Keypoint &keypoint)
 {
     if (mapKeypoints_.count(keypoint.keypointId_))
     {
-        std::cout << "\nWEIRD! Trying to add a keypoint with an already existing keypointId. Ignoring.\n";
         return;
     }
 

@@ -550,7 +550,7 @@ void MapManager::removeKeyframe(const int keyframeId)
 
     if (state_->debug_)
     {
-        std::cout << "\n \t >>> removeKeyframe() --> Removed keyframe #" << keyframeId;
+        std::cout << "- [Map-Manager]: Remove keyframe #" << keyframeId << std::endl;
     }
 }
 
