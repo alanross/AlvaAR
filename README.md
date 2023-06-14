@@ -36,8 +36,7 @@ To run the examples on another device in your local network, they must be served
     $: cd ./AlvaAR/examples
     $: mkdir ssl/
     $: cd ssl/
-    $: openssl genrsa -des3 -out key.pem 2048
-    $: openssl req -new -sha256 -key key.pem -out cert.csr
+    $: openssl req -nodes -new -x509 -keyout key.pem -out cert.pem
 ```
 
 #### 3) Run
