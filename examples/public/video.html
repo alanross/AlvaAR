@@ -166,13 +166,12 @@
 
                 if( doFindPlane )
                 {
-                    doFindPlane = false;
-
                     const planePose = alva.findPlane();
 
                     if( planePose )
                     {
                         camRenderer.createObjectWithPose( planePose );
+                        doFindPlane = false;
                     }
                 }
             }
