@@ -14,17 +14,17 @@ BUILD_TYPE="DEFAULT"
 
 if [ $BUILD_TYPE = "SIMD" ]; then
   echo "Compiling with SIMD enabled"
-  INSTALL_DIR=$LIB_ROOT/build_simd/
+  INSTALL_DIR=$LIB_ROOT/build_simd
   BUILD_FLAGS="-O3 -std=c++17 -msimd128";
   CONF_OPENCV="--simd";
 elif [ $BUILD_TYPE = "THREADS" ]; then
   echo "Compiling with THREADS enabled"
-  INSTALL_DIR=$LIB_ROOT/build_threads/
+  INSTALL_DIR=$LIB_ROOT/build_threads
   BUILD_FLAGS="-O3 -std=c++17 -s USE_PTHREADS=1 -s PTHREAD_POOL_SIZE=4";
   CONF_OPENCV="--threads";
 else
   echo "Compiling with DEFAULT settings"
-  INSTALL_DIR=$LIB_ROOT/build/
+  INSTALL_DIR=$LIB_ROOT/build
   BUILD_FLAGS="-O3 -std=c++17";
   CONF_OPENCV="";
 fi
@@ -35,8 +35,10 @@ build_OPENCV() {
   # For more options look here: https://docs.opencv.org/4.x/d4/da1/tutorial_js_setup.html
 
   rm -rf $INSTALL_DIR/opencv/
+  rm -rf $LIB_ROOT/opencv/build
 
-  python $LIB_ROOT/opencv/platforms/js/build_js.py $INSTALL_DIR/opencv --build_wasm $CONF_OPENCV --emscripten_dir $EMSCRIPTEN_DIR
+  python $LIB_ROOT/opencv/platforms/js/build_js.py $LIB_ROOT/opencv/build --build_wasm $CONF_OPENCV --emscripten_dir $EMSCRIPTEN_DIR
+  cp -r $LIB_ROOT/opencv/build $INSTALL_DIR/opencv/
 }
 
 build_EIGEN() {
