@@ -13,12 +13,16 @@ message(STATUS "Build type: " ${CMAKE_BUILD_TYPE})
 # Setting the flags for profiling information or not
 if(CMAKE_BUILD_TYPE MATCHES Release)
   message(STATUS "Setting Release options")
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -O3 -march=native")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O3 -march=native")
+  # set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -O3 -march=native")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -O3")
+  # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O3 -march=native")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O3")
 elseif(CMAKE_BUILD_TYPE MATCHES Debug)
   message(STATUS "Setting Debug options")
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -O1 -pg -march=native")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O1 -pg -march=native")
+  # set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -O1 -pg -march=native")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -O1 -pg")
+  # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O1 -pg -march=native")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -O1 -pg")
 endif()
 
 # Check C++11 or C++0x support
@@ -37,6 +41,7 @@ else()
 endif()
 
 # Packages required to work with the library
+set(OpenCV_DIR "/sandbox/alvaar/AlvaAR/src/libs/build/opencv/")
 find_package(OpenCV REQUIRED) # OpenCV
 
 # Printing the compiling flags

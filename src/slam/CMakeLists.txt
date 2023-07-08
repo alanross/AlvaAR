@@ -14,8 +14,10 @@ endif ()
 
 # Set Emscripten toolchain, if not defined
 if (NOT CMAKE_TOOLCHAIN_FILE)
-    message(STATUS "CMAKE_TOOLCHAIN_FILE not set. Using '~/Development/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake'")
-    set(CMAKE_TOOLCHAIN_FILE "~/Development/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake")
+    # message(STATUS "CMAKE_TOOLCHAIN_FILE not set. Using '~/Development/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake'")
+    message(STATUS "CMAKE_TOOLCHAIN_FILE not set. Using '/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake'")
+    # set(CMAKE_TOOLCHAIN_FILE "~/Development/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake")
+    set(CMAKE_TOOLCHAIN_FILE "/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake")
 endif (NOT CMAKE_TOOLCHAIN_FILE)
 
 # Set "Release" as build type, if not defined
@@ -42,10 +44,23 @@ include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/imgproc/include/)
 include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/objdetect/include/)
 include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/video/include/)
 include_directories(${LIBS_BUILD_FOLDER}/opencv/)
-include_directories(${LIBS_BUILD_FOLDER}/opengv/include/)
-include_directories(${LIBS_BUILD_FOLDER}/eigen/include/eigen3)
+# include_directories(${LIBS_BUILD_FOLDER}/opengv/include/) # 存在しない
+include_directories(${LIBS_BUILD_FOLDER}/../opengv/include/) # ☆add
+# include_directories(${LIBS_BUILD_FOLDER}/eigen/include/eigen3)
+include_directories(${LIBS_BUILD_FOLDER}/../eigen/) # add
 include_directories(${LIBS_BUILD_FOLDER}/Sophus/include/)
-include_directories(${LIBS_BUILD_FOLDER}/ceres-solver/include/)
+# include_directories(${LIBS_BUILD_FOLDER}/ceres-solver/include/) # 存在しない
+include_directories(${LIBS_BUILD_FOLDER}/../ceres-solver/internal/) # ☆add
+include_directories(${LIBS_BUILD_FOLDER}/../ceres-solver/internal/ceres/miniglog/) # ☆add
+include_directories(${LIBS_BUILD_FOLDER}/../ceres-solver/include/) # ☆add
+# include_directories(${LIBS_BUILD_FOLDER}/../ceres-solver/config/) # ☆add
+include_directories(${LIBS_BUILD_FOLDER}/../ceres-solver/build/config/) # ☆add
+# include_directories(${LIBS_BUILD_FOLDER}/../../slam/src/) # ☆add
+include_directories(/emsdk/upstream/emscripten/cache/sysroot/include/) # ☆add for glog
+# include_directories(/usr/include/c++/11/) # ☆add for cstdio
+# include_directories(/usr/include/x86_64-linux-gnu/c++/11/) # ☆add for bits
+# include_directories(/usr/include/x86_64-linux-gnu/c++/11/x32/) # ☆add
+# include_directories(/usr/include/x86_64-linux-gnu/) # ☆add
 include_directories(src)
 
 # Add the project source files

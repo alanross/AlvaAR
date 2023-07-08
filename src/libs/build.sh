@@ -4,7 +4,8 @@
 LIB_ROOT=$PWD
 
 # Ensure this is adjusted to your local emsdk path
-EMSCRIPTEN_DIR=~/Development/emsdk/upstream/emscripten
+# EMSCRIPTEN_DIR=~/Development/emsdk/upstream/emscripten
+EMSCRIPTEN_DIR=/emsdk/upstream/emscripten
 
 # Emscripten cmake
 EMSCRIPTEN_CMAKE_DIR=$EMSCRIPTEN_DIR/cmake/Modules/Platform/Emscripten.cmake
@@ -14,17 +15,17 @@ BUILD_TYPE="DEFAULT"
 
 if [ $BUILD_TYPE = "SIMD" ]; then
   echo "Compiling with SIMD enabled"
-  INSTALL_DIR=$LIB_ROOT/build_simd
+  INSTALL_DIR=$LIB_ROOT/build_simd/
   BUILD_FLAGS="-O3 -std=c++17 -msimd128";
   CONF_OPENCV="--simd";
 elif [ $BUILD_TYPE = "THREADS" ]; then
   echo "Compiling with THREADS enabled"
-  INSTALL_DIR=$LIB_ROOT/build_threads
+  INSTALL_DIR=$LIB_ROOT/build_threads/
   BUILD_FLAGS="-O3 -std=c++17 -s USE_PTHREADS=1 -s PTHREAD_POOL_SIZE=4";
   CONF_OPENCV="--threads";
 else
   echo "Compiling with DEFAULT settings"
-  INSTALL_DIR=$LIB_ROOT/build
+  INSTALL_DIR=$LIB_ROOT/build/
   BUILD_FLAGS="-O3 -std=c++17";
   CONF_OPENCV="";
 fi
@@ -35,10 +36,8 @@ build_OPENCV() {
   # For more options look here: https://docs.opencv.org/4.x/d4/da1/tutorial_js_setup.html
 
   rm -rf $INSTALL_DIR/opencv/
-  rm -rf $LIB_ROOT/opencv/build
 
-  python $LIB_ROOT/opencv/platforms/js/build_js.py $LIB_ROOT/opencv/build --build_wasm $CONF_OPENCV --emscripten_dir $EMSCRIPTEN_DIR
-  cp -r $LIB_ROOT/opencv/build $INSTALL_DIR/opencv/
+  python $LIB_ROOT/opencv/platforms/js/build_js.py $INSTALL_DIR/opencv --build_wasm $CONF_OPENCV --emscripten_dir $EMSCRIPTEN_DIR
 }
 
 build_EIGEN() {
@@ -66,7 +65,7 @@ build_OBINDEX2() {
   cd $LIB_ROOT/obindex2/build
   emcmake cmake .. \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_CXX_STANDARD=17 \
+    -DCMAKE_CXX_STANDARD=11 \
     -DCMAKE_TOOLCHAIN_FILE=$EMSCRIPTEN_CMAKE_DIR \
     -DCMAKE_CXX_FLAGS="${BUILD_FLAGS} -s USE_BOOST_HEADERS=1" \
     -DCMAKE_C_FLAGS="${BUILD_FLAGS} -s USE_BOOST_HEADERS=1" \
@@ -84,7 +83,7 @@ build_IBOW_LCD(){
   cd $LIB_ROOT/ibow_lcd/build
   emcmake cmake .. \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_CXX_STANDARD=17 \
+    -DCMAKE_CXX_STANDARD=11 \
     -DCMAKE_TOOLCHAIN_FILE=$EMSCRIPTEN_CMAKE_DIR \
     -DCMAKE_CXX_FLAGS="${BUILD_FLAGS} -s USE_BOOST_HEADERS=1" \
     -DCMAKE_C_FLAGS="${BUILD_FLAGS} -s USE_BOOST_HEADERS=1" \
@@ -136,7 +135,7 @@ build_CERES(){
     -DMINIGLOG:BOOL=1 \
     -DEigen3_DIR=$LIB_ROOT/eigen/build/
   emmake make -j install
-  find $INSTALL_DIR/ceres-solver/include -type f -name '*.h' -exec sed -i '' s#glog/logging.h#ceres/internal/miniglog/glog/logging.h#g {} +
+  find $INSTALL_DIR/ceres-solver/include -type f -name '*.h' -exec sed -i'' s#glog/logging.h#ceres/internal/miniglog/glog/logging.h#g {} +
 }
 
 build_OPENGV(){

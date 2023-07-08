@@ -1,0 +1,20 @@
+#####################################################################
+#
+# WebAssembly を触ってみよう環境
+#
+# Setup command:
+#     docker compose run --rm -p 8000:8000 emsdk_sandbox
+#
+#####################################################################
+
+version: "3.8"
+services:
+  emsdk_sandbox:
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+    volumes:
+      - $pwd:/sandbox
+    working_dir: /sandbox
+    command: bash --login
+
