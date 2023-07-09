@@ -13,4 +13,3 @@ RUN apt update && \
     apt upgrade -y && \
     apt install -y vim && \
     ln -s /usr/bin/python3 /usr/bin/python 
-

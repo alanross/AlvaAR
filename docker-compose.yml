@@ -1,9 +1,8 @@
 #####################################################################
 #
-# WebAssembly を触ってみよう環境
-#
-# Setup command:
-#     docker compose run --rm -p 8000:8000 emsdk_sandbox
+# Emscripten Environments Setup Command:
+#     docker compose run emsdk_sandbox
+#     (If run http(s) server, add option `-p` (ex. -p 8000:8000))
 #
 #####################################################################
 
@@ -17,4 +16,3 @@ services:
       - $pwd:/sandbox
     working_dir: /sandbox
     command: bash --login
-

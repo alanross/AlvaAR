@@ -37,7 +37,7 @@ $ python -m http.server 8080
 [ビルド手順](../README.md#Build)にあるすべてを実行するスクリプトが [build.sh](../build.sh) にある。これで一発。
 
 ```
-$ bash ./build.sh
+$ bash ./build.sh > build.log 2>&1
 ```
 
 以降、ビルドを実行するにあたって、修正が必要だった箇所について説明する。
